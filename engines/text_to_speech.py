@@ -70,7 +70,10 @@ class TTSEngine:
 
     def _ja_to_ipa(self, text: str) -> list[str]:
         """Convert Japanese text (kanji/kana) to Piper-compatible IPA phonemes."""
-        res = self._kakasi.convert(text)
+        # Normalize spoken particles and greetings
+        normalized = text.replace("こんにちは", "こんにちわ").replace("こんばんは", "こんばんわ")
+        
+        res = self._kakasi.convert(normalized)
         phones = []
         for item in res:
             rom = item['hepburn'].lower()
@@ -112,7 +115,13 @@ class TTSEngine:
         if lang == "ja":
             ipa = self._ja_to_ipa(text.strip())
             phoneme_ids = voice.phonemes_to_ids(ipa)
-            audio_bytes = voice.phoneme_ids_to_audio(phoneme_ids)
+            audio_array = voice.phoneme_ids_to_audio(phoneme_ids)
+            # Piper returns float32 in [-1.0, 1.0]. Convert to 16-bit signed PCM bytes cleanly:
+            if isinstance(audio_array, np.ndarray):
+                audio_int16 = (np.clip(audio_array, -1.0, 1.0) * 32767.0).astype(np.int16)
+                audio_bytes = audio_int16.tobytes()
+            else:
+                audio_bytes = bytes(audio_array)
         else:
             chunks = list(voice.synthesize(text.strip()))
             audio_bytes = b"".join([c.audio_int16_bytes for c in chunks])

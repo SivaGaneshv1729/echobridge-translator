@@ -73,10 +73,21 @@ class AudioPlayback:
         else:
             threading.Thread(target=_play_thread, daemon=True).start()
 
-    def play_raw_bytes(self, raw_bytes: bytes, sample_rate: int = 22050, blocking: bool = False):
-        """Play 16-bit PCM raw audio bytes (typical Piper TTS output)."""
-        audio_int16 = np.frombuffer(raw_bytes, dtype=np.int16)
-        self.play(audio_int16, sample_rate=sample_rate, blocking=blocking)
+    def play_raw_bytes(self, raw_bytes, sample_rate: int = 22050, blocking: bool = False):
+        """Play 16-bit PCM raw audio bytes or numpy array (typical Piper TTS output)."""
+        if isinstance(raw_bytes, np.ndarray):
+            if raw_bytes.dtype == np.float32 or raw_bytes.dtype == np.int16:
+                self.play(raw_bytes, sample_rate=sample_rate, blocking=blocking)
+                return
+            raw_bytes = raw_bytes.tobytes()
+
+        if isinstance(raw_bytes, (bytes, bytearray)):
+            if len(raw_bytes) % 2 != 0:
+                raw_bytes = raw_bytes[:len(raw_bytes) - (len(raw_bytes) % 2)]
+            audio_int16 = np.frombuffer(raw_bytes, dtype=np.int16)
+            self.play(audio_int16, sample_rate=sample_rate, blocking=blocking)
+        else:
+            logger.error(f"Unsupported audio type for play_raw_bytes: {type(raw_bytes)}")
 
     def stop(self):
         """Immediately stop playback."""
