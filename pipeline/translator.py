@@ -30,6 +30,7 @@ class TranslationPipeline:
         self.auto_playback = auto_playback
 
         # Event callbacks
+        self.on_audio_level: Optional[Callable[[float], None]] = None
         self.on_speech_detected: Optional[Callable[[], None]] = None
         self.on_transcription: Optional[Callable[[str, str, float], None]] = None
         self.on_translation: Optional[Callable[[str, float], None]] = None
@@ -42,6 +43,7 @@ class TranslationPipeline:
         self.vad = SileroVAD(f"{models_dir}/vad/silero_vad.onnx")
         self.segmenter = UtteranceSegmenter(self.vad)
         self.capture = AudioCapture(device_index=input_device_index, chunk_callback=self._on_audio_chunk)
+        self.capture.level_callback = lambda lvl: self.on_audio_level(lvl) if self.on_audio_level else None
         self.playback = AudioPlayback(device_index=output_device_index)
         
         self.stt = SpeechRecognizer(model_size=stt_size)

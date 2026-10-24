@@ -21,6 +21,7 @@ class AudioCapture:
         self.chunk_size = chunk_size
         self.device_index = device_index
         self.chunk_callback = chunk_callback
+        self.level_callback = None
         
         self._stream: Optional[sd.InputStream] = None
         self._is_recording = False
@@ -49,6 +50,15 @@ class AudioCapture:
         # indata is (frames, channels), extract mono channel
         chunk = indata[:, 0].copy()
         
+        if self.level_callback:
+            try:
+                rms = float(np.sqrt(np.mean(chunk**2)))
+                # Scale RMS logarithmically/linearly to 0.0-1.0
+                norm_level = min(1.0, rms * 15.0)
+                self.level_callback(norm_level)
+            except Exception:
+                pass
+
         if self.chunk_callback:
             try:
                 self.chunk_callback(chunk)

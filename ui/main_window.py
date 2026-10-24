@@ -1,28 +1,32 @@
-"""Main Desktop Application Window for EchoBridge Speech Translator."""
+"""Enhanced Modern Desktop GUI for EchoBridge with Live Audio VU Meter and Clear High-Contrast Controls."""
 import os
 import sys
 import json
+import time
 import logging
 from typing import Optional, Dict, Any
+import numpy as np
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QLabel, QPushButton, QComboBox, QFrame, 
     QProgressBar, QTextEdit, QTabWidget, QSplitter,
-    QStatusBar, QMessageBox
+    QStatusBar, QMessageBox, QGraphicsDropShadowEffect
 )
 from PySide6.QtCore import Qt, QThread, Signal, Slot, QTimer
-from PySide6.QtGui import QIcon, QFont, QColor, QPalette
+from PySide6.QtGui import QFont, QColor, QPalette
 
 from pipeline.translator import TranslationPipeline
 from pipeline.conversation import ConversationManager, ConversationTurn
 from ui.conversation_view import ConversationView
 from ui.settings_view import SettingsDialog
+from engines.text_to_speech import TTSEngine
 
 logger = logging.getLogger(__name__)
 
 class PipelineWorker(QThread):
     """Background worker thread to handle speech translation inference off the UI thread."""
+    audio_level_changed = Signal(float)
     speech_detected = Signal()
     transcription_ready = Signal(str, str, float)
     translation_ready = Signal(str, float)
@@ -37,6 +41,7 @@ class PipelineWorker(QThread):
 
     def _setup_callbacks(self):
         pipeline = self.manager.pipeline
+        pipeline.on_audio_level = lambda lvl: self.audio_level_changed.emit(lvl)
         pipeline.on_speech_detected = lambda: self.speech_detected.emit()
         pipeline.on_transcription = lambda text, lang, lat: self.transcription_ready.emit(text, lang, lat)
         pipeline.on_translation = lambda text, lat: self.translation_ready.emit(text, lat)
@@ -58,8 +63,8 @@ class MainWindow(QMainWindow):
         self.load_config()
 
         self.setWindowTitle("EchoBridge — Offline Real-Time Speech Translator")
-        self.resize(1000, 750)
-        self.setMinimumSize(850, 600)
+        self.resize(1060, 780)
+        self.setMinimumSize(900, 650)
 
         # Initialize conversation manager and background worker
         self.manager = ConversationManager(
@@ -86,6 +91,7 @@ class MainWindow(QMainWindow):
             self.config = {}
 
     def connect_worker_signals(self):
+        self.worker.audio_level_changed.connect(self.on_audio_level)
         self.worker.speech_detected.connect(self.on_speech_detected)
         self.worker.transcription_ready.connect(self.on_transcription_ready)
         self.worker.translation_ready.connect(self.on_translation_ready)
@@ -97,130 +103,191 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(20, 16, 20, 16)
+        main_layout.setContentsMargins(24, 20, 24, 20)
         main_layout.setSpacing(14)
 
         # --- Top Header Bar ---
         header = QHBoxLayout()
-        title_label = QLabel("🌉 EchoBridge")
-        title_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #f8fafc;")
+        title_box = QVBoxLayout()
+        title_label = QLabel("EchoBridge")
+        title_label.setStyleSheet("font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: 0.5px;")
+        sub_title = QLabel("Zero-Cost Offline Real-Time Speech Translator")
+        sub_title.setStyleSheet("font-size: 12px; color: #94a3b8;")
+        title_box.addWidget(title_label)
+        title_box.addWidget(sub_title)
 
-        badge = QLabel("● 100% Offline Local Inference")
+        badge = QLabel("100% OFFLINE MODE")
         badge.setStyleSheet("""
             background-color: #064e3b;
             color: #34d399;
-            padding: 4px 10px;
-            border-radius: 12px;
+            padding: 6px 14px;
+            border-radius: 14px;
             font-size: 11px;
-            font-weight: bold;
+            font-weight: 800;
+            border: 1px solid #059669;
         """)
 
-        self.settings_btn = QPushButton("⚙ Settings")
+        self.settings_btn = QPushButton("Settings")
         self.settings_btn.setObjectName("settingsBtn")
+        self.settings_btn.setFixedHeight(36)
         self.settings_btn.clicked.connect(self.open_settings)
 
-        header.addWidget(title_label)
+        header.addLayout(title_box)
+        header.addSpacing(16)
         header.addWidget(badge)
         header.addStretch()
         header.addWidget(self.settings_btn)
         main_layout.addLayout(header)
 
-        # --- Language Selector & Control Bar ---
+        # --- Main Control Panel Card ---
         ctrl_card = QFrame()
         ctrl_card.setObjectName("controlCard")
-        ctrl_layout = QHBoxLayout(ctrl_card)
-        ctrl_layout.setContentsMargins(16, 12, 16, 12)
-        ctrl_layout.setSpacing(12)
+        ctrl_layout = QVBoxLayout(ctrl_card)
+        ctrl_layout.setContentsMargins(18, 16, 18, 16)
+        ctrl_layout.setSpacing(14)
 
-        # Source Lang Combo
+        # Row 1: Languages + Direction Swap
+        lang_row = QHBoxLayout()
+        lang_row.setSpacing(12)
+
+        src_box = QVBoxLayout()
+        src_label = QLabel("INPUT LANGUAGE (SPEAKER)")
+        src_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #94a3b8;")
         self.src_combo = QComboBox()
-        self.src_combo.addItem("🇺🇸 English", "en")
-        self.src_combo.addItem("🇯🇵 Japanese", "ja")
+        self.src_combo.setFixedHeight(38)
+        self.src_combo.addItem("English (United States)", "en")
+        self.src_combo.addItem("Japanese (Japan)", "ja")
         self.src_combo.currentIndexChanged.connect(self.on_lang_combo_changed)
+        src_box.addWidget(src_label)
+        src_box.addWidget(self.src_combo)
 
-        # Swap Button
-        self.swap_btn = QPushButton("⇄ Swap")
+        self.swap_btn = QPushButton("⇄  SWAP LANGUAGES")
         self.swap_btn.setObjectName("swapBtn")
+        self.swap_btn.setFixedHeight(38)
+        self.swap_btn.setFixedWidth(180)
         self.swap_btn.clicked.connect(self.on_swap_clicked)
 
-        # Target Lang Combo
+        tgt_box = QVBoxLayout()
+        tgt_label = QLabel("TRANSLATE & SPEAK IN")
+        tgt_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #38bdf8;")
         self.tgt_combo = QComboBox()
-        self.tgt_combo.addItem("🇯🇵 Japanese", "ja")
-        self.tgt_combo.addItem("🇺🇸 English", "en")
+        self.tgt_combo.setFixedHeight(38)
+        self.tgt_combo.addItem("Japanese (Japan)", "ja")
+        self.tgt_combo.addItem("English (United States)", "en")
         self.tgt_combo.currentIndexChanged.connect(self.on_lang_combo_changed)
+        tgt_box.addWidget(tgt_label)
+        tgt_box.addWidget(self.tgt_combo)
 
-        # Mic Toggle Button
-        self.mic_btn = QPushButton("🎤 Start Listening")
+        lang_row.addLayout(src_box, stretch=1)
+        lang_row.addWidget(self.swap_btn, alignment=Qt.AlignBottom)
+        lang_row.addLayout(tgt_box, stretch=1)
+        ctrl_layout.addLayout(lang_row)
+
+        # Row 2: Action Buttons (Large, high-contrast)
+        action_row = QHBoxLayout()
+        action_row.setSpacing(12)
+
+        # Start Listening Toggle Button
+        self.mic_btn = QPushButton("▶  START LISTENING")
         self.mic_btn.setObjectName("micBtn")
+        self.mic_btn.setFixedHeight(44)
+        self.mic_btn.setMinimumWidth(200)
         self.mic_btn.clicked.connect(self.toggle_microphone)
 
-        # Push to Talk
-        self.ptt_btn = QPushButton("✋ Push to Talk")
+        # Push-to-Talk Button
+        self.ptt_btn = QPushButton("HOLD TO TALK")
         self.ptt_btn.setObjectName("pttBtn")
+        self.ptt_btn.setFixedHeight(44)
+        self.ptt_btn.setMinimumWidth(160)
         self.ptt_btn.pressed.connect(self.on_ptt_pressed)
         self.ptt_btn.released.connect(self.on_ptt_released)
 
-        # Speaker Mute Toggle
-        self.mute_btn = QPushButton("🔊 Audio: ON")
+        # Speaker Mute Button
+        self.mute_btn = QPushButton("AUDIO OUTPUT: ON")
         self.mute_btn.setObjectName("muteBtn")
+        self.mute_btn.setFixedHeight(44)
         self.mute_btn.clicked.connect(self.toggle_mute)
 
-        ctrl_layout.addWidget(QLabel("Speak:"))
-        ctrl_layout.addWidget(self.src_combo)
-        ctrl_layout.addWidget(self.swap_btn)
-        ctrl_layout.addWidget(QLabel("Translate to:"))
-        ctrl_layout.addWidget(self.tgt_combo)
-        ctrl_layout.addStretch()
-        ctrl_layout.addWidget(self.ptt_btn)
-        ctrl_layout.addWidget(self.mic_btn)
-        ctrl_layout.addWidget(self.mute_btn)
+        # Quick Test Button
+        self.test_en_btn = QPushButton("TEST SAMPLE (EN ➔ JA)")
+        self.test_en_btn.setObjectName("testBtn")
+        self.test_en_btn.setFixedHeight(44)
+        self.test_en_btn.clicked.connect(self.run_quick_test)
+
+        action_row.addWidget(self.mic_btn, stretch=2)
+        action_row.addWidget(self.ptt_btn, stretch=1)
+        action_row.addWidget(self.mute_btn, stretch=1)
+        action_row.addWidget(self.test_en_btn, stretch=1)
+        ctrl_layout.addLayout(action_row)
+
+        # Row 3: Live Microphone VU Level & VAD Status Bar
+        meter_row = QHBoxLayout()
+        meter_row.setSpacing(10)
+
+        mic_icon = QLabel("MIC INPUT:")
+        mic_icon.setStyleSheet("font-size: 11px; font-weight: bold; color: #94a3b8;")
+        
+        self.vu_bar = QProgressBar()
+        self.vu_bar.setObjectName("vuBar")
+        self.vu_bar.setRange(0, 100)
+        self.vu_bar.setValue(0)
+        self.vu_bar.setTextVisible(False)
+        self.vu_bar.setFixedHeight(12)
+
+        self.vad_badge = QLabel("MIC IDLE")
+        self.vad_badge.setObjectName("vadBadge")
+        self.vad_badge.setAlignment(Qt.AlignCenter)
+        self.vad_badge.setFixedSize(130, 24)
+
+        meter_row.addWidget(mic_icon)
+        meter_row.addWidget(self.vu_bar, stretch=1)
+        meter_row.addWidget(self.vad_badge)
+        ctrl_layout.addLayout(meter_row)
+
         main_layout.addWidget(ctrl_card)
 
-        # --- Status & VAD Mic Indicator Bar ---
-        status_bar_layout = QHBoxLayout()
-        self.status_label = QLabel("Ready. Press 'Start Listening' or hold 'Push to Talk'.")
-        self.status_label.setStyleSheet("color: #94a3b8; font-size: 12px; font-weight: 500;")
+        # --- Status Banner ---
+        self.status_label = QLabel("Ready. Press 'START LISTENING' or hold 'HOLD TO TALK' to begin.")
+        self.status_label.setStyleSheet("color: #94a3b8; font-size: 13px; font-weight: 600; padding: 2px 4px;")
+        main_layout.addWidget(self.status_label)
 
-        self.vad_indicator = QLabel("● Mic Idle")
-        self.vad_indicator.setStyleSheet("color: #64748b; font-size: 12px; font-weight: bold;")
-
-        status_bar_layout.addWidget(self.status_label)
-        status_bar_layout.addStretch()
-        status_bar_layout.addWidget(self.vad_indicator)
-        main_layout.addLayout(status_bar_layout)
-
-        # --- Main View Tabs (Live Translation vs Conversation History) ---
+        # --- Main Tabs (Live Translation vs Conversation History) ---
         self.tabs = QTabWidget()
         self.tabs.setObjectName("mainTabs")
 
-        # Tab 1: Live Translation Panels
+        # Tab 1: Live Translation
         live_widget = QWidget()
         live_layout = QHBoxLayout(live_widget)
         live_layout.setContentsMargins(0, 10, 0, 0)
         live_layout.setSpacing(14)
 
-        # Left: Original Speech Card
+        # Left Card: Original Speech
         orig_card = QFrame()
         orig_card.setObjectName("textCard")
         orig_layout = QVBoxLayout(orig_card)
+        orig_header_layout = QHBoxLayout()
         orig_header = QLabel("Original Transcription")
-        orig_header.setStyleSheet("color: #94a3b8; font-weight: bold; font-size: 13px;")
+        orig_header.setStyleSheet("color: #cbd5e1; font-weight: 800; font-size: 14px;")
+        orig_header_layout.addWidget(orig_header)
+        orig_header_layout.addStretch()
+
         self.orig_text = QTextEdit()
         self.orig_text.setReadOnly(True)
-        self.orig_text.setPlaceholderText("Spoken words will appear here in real-time...")
-        orig_layout.addWidget(orig_header)
+        self.orig_text.setPlaceholderText("Spoken words will appear here in real-time as you speak...")
+        orig_layout.addLayout(orig_header_layout)
         orig_layout.addWidget(self.orig_text)
 
-        # Right: Translated Speech Card
+        # Right Card: Translated Speech
         trans_card = QFrame()
         trans_card.setObjectName("textCard")
         trans_layout = QVBoxLayout(trans_card)
         trans_header_layout = QHBoxLayout()
         trans_header = QLabel("Translated Speech")
-        trans_header.setStyleSheet("color: #38bdf8; font-weight: bold; font-size: 13px;")
+        trans_header.setStyleSheet("color: #38bdf8; font-weight: 800; font-size: 14px;")
         
-        self.replay_btn = QPushButton("▶ Replay Audio")
+        self.replay_btn = QPushButton("▶ Replay Voice")
         self.replay_btn.setObjectName("replayBtn")
+        self.replay_btn.setFixedHeight(30)
         self.replay_btn.clicked.connect(self.replay_audio)
         self.replay_btn.setEnabled(False)
 
@@ -230,17 +297,17 @@ class MainWindow(QMainWindow):
 
         self.trans_text = QTextEdit()
         self.trans_text.setReadOnly(True)
-        self.trans_text.setPlaceholderText("Translated output will be displayed and spoken here...")
+        self.trans_text.setPlaceholderText("Translated output will appear and be spoken aloud here...")
         trans_layout.addLayout(trans_header_layout)
         trans_layout.addWidget(self.trans_text)
 
         live_layout.addWidget(orig_card, stretch=1)
         live_layout.addWidget(trans_card, stretch=1)
-        self.tabs.addTab(live_widget, "💬 Live Translation")
+        self.tabs.addTab(live_widget, "Live Translation")
 
         # Tab 2: Conversation History View
         self.conversation_view = ConversationView()
-        self.tabs.addTab(self.conversation_view, "📜 Conversation History")
+        self.tabs.addTab(self.conversation_view, "Conversation History")
 
         main_layout.addWidget(self.tabs, stretch=1)
 
@@ -248,24 +315,25 @@ class MainWindow(QMainWindow):
         footer_card = QFrame()
         footer_card.setObjectName("footerCard")
         footer_layout = QHBoxLayout(footer_card)
-        footer_layout.setContentsMargins(14, 8, 14, 8)
+        footer_layout.setContentsMargins(16, 10, 16, 10)
 
         self.stt_lat_label = QLabel("STT: -- ms")
         self.mt_lat_label = QLabel("MT: -- ms")
         self.tts_lat_label = QLabel("TTS: -- ms")
-        self.total_lat_label = QLabel("⚡ Total Latency: -- ms")
-        self.total_lat_label.setStyleSheet("color: #38bdf8; font-weight: bold;")
+        self.total_lat_label = QLabel("Total Latency: -- ms")
+        self.total_lat_label.setStyleSheet("color: #38bdf8; font-weight: 800; font-size: 13px;")
 
-        self.target_badge = QLabel("Target: <1.5s")
-        self.target_badge.setStyleSheet("color: #94a3b8; font-size: 11px;")
+        self.target_badge = QLabel("Benchmark: <1.5s Target")
+        self.target_badge.setStyleSheet("color: #94a3b8; font-size: 12px; font-weight: bold;")
 
         footer_layout.addWidget(self.stt_lat_label)
-        footer_layout.addWidget(QLabel("|"))
+        footer_layout.addSpacing(16)
         footer_layout.addWidget(self.mt_lat_label)
-        footer_layout.addWidget(QLabel("|"))
+        footer_layout.addSpacing(16)
         footer_layout.addWidget(self.tts_lat_label)
         footer_layout.addStretch()
         footer_layout.addWidget(self.target_badge)
+        footer_layout.addSpacing(16)
         footer_layout.addWidget(self.total_lat_label)
         main_layout.addWidget(footer_card)
 
@@ -273,104 +341,155 @@ class MainWindow(QMainWindow):
         self.setStyleSheet("""
             QMainWindow {
                 background-color: #0b0f19;
+                font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
             }
             QFrame#controlCard {
                 background-color: #111827;
                 border: 1px solid #1f2937;
-                border-radius: 10px;
+                border-radius: 12px;
             }
             QFrame#textCard {
                 background-color: #111827;
                 border: 1px solid #1f2937;
-                border-radius: 10px;
-                padding: 10px;
+                border-radius: 12px;
+                padding: 12px;
             }
             QFrame#footerCard {
                 background-color: #111827;
                 border: 1px solid #1f2937;
-                border-radius: 8px;
+                border-radius: 10px;
             }
             QLabel {
                 color: #e2e8f0;
+                font-size: 13px;
             }
             QComboBox {
                 background-color: #1f2937;
-                color: #f8fafc;
+                color: #ffffff;
                 border: 1px solid #374151;
-                border-radius: 6px;
+                border-radius: 8px;
                 padding: 6px 12px;
-                font-weight: 500;
+                font-size: 13px;
+                font-weight: 600;
+            }
+            QComboBox:hover {
+                border-color: #38bdf8;
             }
             QPushButton#swapBtn {
-                background-color: #1f2937;
-                color: #38bdf8;
-                border: 1px solid #374151;
-                border-radius: 6px;
-                padding: 6px 12px;
-                font-weight: bold;
+                background-color: #312e81;
+                color: #c7d2fe;
+                border: 1px solid #4338ca;
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: 800;
             }
             QPushButton#swapBtn:hover {
-                background-color: #374151;
+                background-color: #3730a3;
+                color: #ffffff;
             }
             QPushButton#micBtn {
-                background-color: #2563eb;
+                background-color: #059669;
                 color: #ffffff;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-weight: bold;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 800;
+                letter-spacing: 0.5px;
             }
             QPushButton#micBtn:hover {
-                background-color: #1d4ed8;
+                background-color: #10b981;
             }
             QPushButton#micBtn[recording="true"] {
                 background-color: #dc2626;
             }
+            QPushButton#micBtn[recording="true"]:hover {
+                background-color: #ef4444;
+            }
             QPushButton#pttBtn {
-                background-color: #0d9488;
+                background-color: #0284c7;
                 color: #ffffff;
-                border-radius: 6px;
-                padding: 8px 14px;
-                font-weight: bold;
+                border: none;
+                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 800;
+            }
+            QPushButton#pttBtn:hover {
+                background-color: #0ea5e9;
             }
             QPushButton#pttBtn:pressed {
-                background-color: #059669;
+                background-color: #0369a1;
             }
             QPushButton#muteBtn {
                 background-color: #1f2937;
                 color: #e2e8f0;
                 border: 1px solid #374151;
-                border-radius: 6px;
-                padding: 6px 12px;
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: 700;
+            }
+            QPushButton#muteBtn:hover {
+                background-color: #374151;
+            }
+            QPushButton#testBtn {
+                background-color: #1e1b4b;
+                color: #a5b4fc;
+                border: 1px solid #3730a3;
+                border-radius: 8px;
+                font-size: 11px;
+                font-weight: 800;
+            }
+            QPushButton#testBtn:hover {
+                background-color: #312e81;
+                color: #ffffff;
             }
             QPushButton#settingsBtn {
                 background-color: #1f2937;
                 color: #94a3b8;
                 border: 1px solid #374151;
-                border-radius: 6px;
-                padding: 6px 12px;
+                border-radius: 8px;
+                padding: 6px 14px;
+                font-weight: 600;
             }
             QPushButton#settingsBtn:hover {
-                color: #f8fafc;
+                color: #ffffff;
                 background-color: #374151;
             }
             QPushButton#replayBtn {
-                background-color: #1e293b;
+                background-color: #0f172a;
                 color: #38bdf8;
-                border: 1px solid #334155;
-                border-radius: 4px;
-                padding: 4px 8px;
-                font-size: 11px;
+                border: 1px solid #0284c7;
+                border-radius: 6px;
+                padding: 4px 12px;
+                font-size: 12px;
+                font-weight: 700;
             }
             QPushButton#replayBtn:hover {
-                background-color: #334155;
+                background-color: #0284c7;
+                color: #ffffff;
+            }
+            QProgressBar#vuBar {
+                background-color: #1f2937;
+                border-radius: 6px;
+            }
+            QProgressBar#vuBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #10b981, stop:0.8 #06b6d4, stop:1 #f59e0b);
+                border-radius: 6px;
+            }
+            QLabel#vadBadge {
+                background-color: #1f2937;
+                color: #64748b;
+                border-radius: 6px;
+                font-size: 11px;
+                font-weight: 800;
             }
             QTextEdit {
                 background-color: #0b0f19;
                 color: #f8fafc;
                 border: 1px solid #1f2937;
-                border-radius: 6px;
-                font-size: 15px;
-                padding: 8px;
+                border-radius: 8px;
+                font-size: 16px;
+                line-height: 1.5;
+                padding: 12px;
             }
             QTabWidget::pane {
                 border: none;
@@ -378,15 +497,18 @@ class MainWindow(QMainWindow):
             QTabBar::tab {
                 background: #111827;
                 color: #94a3b8;
-                padding: 8px 16px;
-                border-top-left-radius: 6px;
-                border-top-right-radius: 6px;
+                padding: 10px 20px;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
                 margin-right: 4px;
+                font-weight: 600;
+                font-size: 13px;
             }
             QTabBar::tab:selected {
                 background: #1f2937;
                 color: #38bdf8;
                 font-weight: bold;
+                border-bottom: 2px solid #38bdf8;
             }
         """)
 
@@ -395,52 +517,53 @@ class MainWindow(QMainWindow):
         pipeline = self.manager.pipeline
         if not pipeline.capture.is_recording:
             pipeline.start_listening()
-            self.mic_btn.setText("⏹ Stop Listening")
+            self.mic_btn.setText("■  STOP LISTENING")
             self.mic_btn.setProperty("recording", True)
             self.mic_btn.style().unpolish(self.mic_btn)
             self.mic_btn.style().polish(self.mic_btn)
-            self.status_label.setText("Listening for speech...")
-            self.vad_indicator.setText("● Listening")
-            self.vad_indicator.setStyleSheet("color: #10b981; font-weight: bold;")
+            self.status_label.setText("Listening for speech... Speak into your microphone now.")
+            self.vad_badge.setText("MIC ACTIVE")
+            self.vad_badge.setStyleSheet("background-color: #064e3b; color: #34d399; font-weight: bold; border-radius: 6px;")
         else:
             pipeline.stop_listening()
-            self.mic_btn.setText("🎤 Start Listening")
+            self.mic_btn.setText("▶  START LISTENING")
             self.mic_btn.setProperty("recording", False)
             self.mic_btn.style().unpolish(self.mic_btn)
             self.mic_btn.style().polish(self.mic_btn)
-            self.status_label.setText("Microphone stopped.")
-            self.vad_indicator.setText("● Mic Idle")
-            self.vad_indicator.setStyleSheet("color: #64748b; font-weight: bold;")
+            self.status_label.setText("Microphone stopped. Press 'START LISTENING' to resume.")
+            self.vad_badge.setText("MIC IDLE")
+            self.vad_badge.setStyleSheet("background-color: #1f2937; color: #64748b; font-weight: bold; border-radius: 6px;")
+            self.vu_bar.setValue(0)
 
     def on_ptt_pressed(self):
         pipeline = self.manager.pipeline
         if not pipeline.capture.is_recording:
             pipeline.start_listening()
             self.status_label.setText("Push-to-Talk active: Speaking...")
-            self.vad_indicator.setText("● Recording PTT")
-            self.vad_indicator.setStyleSheet("color: #06b6d4; font-weight: bold;")
+            self.vad_badge.setText("HOLDING PTT")
+            self.vad_badge.setStyleSheet("background-color: #075985; color: #38bdf8; font-weight: bold; border-radius: 6px;")
 
     def on_ptt_released(self):
         pipeline = self.manager.pipeline
         if pipeline.capture.is_recording:
             pipeline.stop_listening()
-            self.status_label.setText("Push-to-Talk released. Processing...")
-            self.vad_indicator.setText("● Mic Idle")
-            self.vad_indicator.setStyleSheet("color: #64748b; font-weight: bold;")
+            self.status_label.setText("Push-to-Talk released. Processing speech...")
+            self.vad_badge.setText("PROCESSING")
+            self.vad_badge.setStyleSheet("background-color: #78350f; color: #f59e0b; font-weight: bold; border-radius: 6px;")
+            self.vu_bar.setValue(0)
 
     def toggle_mute(self):
         playback = self.manager.pipeline.playback
         playback.muted = not playback.muted
         if playback.muted:
-            self.mute_btn.setText("🔇 Audio: MUTED")
-            self.mute_btn.setStyleSheet("color: #f87171;")
+            self.mute_btn.setText("AUDIO OUTPUT: MUTED")
+            self.mute_btn.setStyleSheet("color: #f87171; border-color: #ef4444;")
         else:
-            self.mute_btn.setText("🔊 Audio: ON")
-            self.mute_btn.setStyleSheet("color: #e2e8f0;")
+            self.mute_btn.setText("AUDIO OUTPUT: ON")
+            self.mute_btn.setStyleSheet("")
 
     def on_swap_clicked(self):
         self.manager.toggle_direction()
-        # Update comboboxes
         src = self.manager.pipeline.source_lang
         tgt = self.manager.pipeline.target_lang
         idx_src = self.src_combo.findData(src)
@@ -453,20 +576,24 @@ class MainWindow(QMainWindow):
             self.tgt_combo.blockSignals(True)
             self.tgt_combo.setCurrentIndex(idx_tgt)
             self.tgt_combo.blockSignals(False)
-        self.status_label.setText(f"Swapped language direction: {src.upper()} ➔ {tgt.upper()}")
+        
+        dir_label = "EN ➔ JA" if src == "en" else "JA ➔ EN"
+        self.status_label.setText(f"Language direction swapped: {dir_label}")
+        self.test_en_btn.setText(f"TEST SAMPLE ({dir_label})")
 
     def on_lang_combo_changed(self):
         src = self.src_combo.currentData()
         tgt = self.tgt_combo.currentData()
         if src == tgt:
-            # Auto-swap other combo
             alt = "ja" if src == "en" else "en"
             self.tgt_combo.blockSignals(True)
             self.tgt_combo.setCurrentIndex(self.tgt_combo.findData(alt))
             self.tgt_combo.blockSignals(False)
             tgt = alt
         self.manager.pipeline.set_languages(src, tgt)
-        self.status_label.setText(f"Active language direction: {src.upper()} ➔ {tgt.upper()}")
+        dir_label = f"{src.upper()} ➔ {tgt.upper()}"
+        self.status_label.setText(f"Active language direction: {dir_label}")
+        self.test_en_btn.setText(f"TEST SAMPLE ({dir_label})")
 
     def open_settings(self):
         dialog = SettingsDialog(self.config_path, self)
@@ -475,7 +602,6 @@ class MainWindow(QMainWindow):
 
     def on_settings_updated(self, new_config):
         self.config = new_config
-        # Apply updated settings
         audio_cfg = new_config.get("audio", {})
         self.manager.pipeline.playback.volume = audio_cfg.get("playback_volume", 1.0)
         self.manager.pipeline.auto_playback = audio_cfg.get("auto_playback", True)
@@ -489,26 +615,49 @@ class MainWindow(QMainWindow):
                 self.last_audio_bytes,
                 sample_rate=self.last_sample_rate
             )
-            self.status_label.setText("Replaying translated speech...")
+            self.status_label.setText("Replaying translated speech aloud...")
 
-    # --- Worker Callbacks ---
+    def run_quick_test(self):
+        """Simulate an instant spoken utterance to verify audio, STT, MT, and TTS."""
+        self.status_label.setText("Generating test spoken utterance...")
+        src = self.manager.pipeline.source_lang
+        test_phrase = "Hello, where is the nearest station?" if src == "en" else "こんにちは、駅はどこですか？"
+
+        # Generate audio using local TTS
+        tts = TTSEngine("models_cache/tts")
+        pcm, sr, _ = tts.synthesize(test_phrase, src)
+        audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+        if sr != 16000:
+            import scipy.signal
+            audio = scipy.signal.resample(audio, int(len(audio) * 16000 / sr)).astype(np.float32)
+
+        # Process through pipeline
+        self.manager.pipeline.process_utterance(audio)
+
+    # --- Worker Signal Slots ---
+    @Slot(float)
+    def on_audio_level(self, level: float):
+        """Update live VU meter bar (0-100)."""
+        val = int(level * 100)
+        self.vu_bar.setValue(val)
+
     @Slot()
     def on_speech_detected(self):
-        self.vad_indicator.setText("● Speech Active")
-        self.vad_indicator.setStyleSheet("color: #f59e0b; font-weight: bold;")
-        self.status_label.setText("Speech detected, listening...")
+        self.vad_badge.setText("SPEECH DETECTED")
+        self.vad_badge.setStyleSheet("background-color: #92400e; color: #fbbf24; font-weight: bold; border-radius: 6px;")
+        self.status_label.setText("Speech detected, processing audio...")
 
     @Slot(str, str, float)
     def on_transcription_ready(self, text: str, lang: str, lat: float):
         self.orig_text.setPlainText(text)
         self.stt_lat_label.setText(f"STT: {lat:.0f} ms")
-        self.status_label.setText("Transcribed speech. Translating...")
+        self.status_label.setText("Transcribed speech. Translating text...")
 
     @Slot(str, float)
     def on_translation_ready(self, text: str, lat: float):
         self.trans_text.setPlainText(text)
         self.mt_lat_label.setText(f"MT: {lat:.0f} ms")
-        self.status_label.setText("Translated. Synthesizing voice...")
+        self.status_label.setText("Translated. Synthesizing voice audio...")
 
     @Slot(bytes, int, float)
     def on_synthesis_ready(self, audio: bytes, sr: int, lat: float):
@@ -516,19 +665,18 @@ class MainWindow(QMainWindow):
         self.last_sample_rate = sr
         self.replay_btn.setEnabled(True)
         self.tts_lat_label.setText(f"TTS: {lat:.0f} ms")
-        self.status_label.setText("Playing translated speech aloud...")
+        self.status_label.setText("Playing translated speech aloud through speakers...")
 
     @Slot(dict)
     def on_pipeline_completed(self, metrics: dict):
         total_lat = metrics.get("total_e2e_latency_ms", 0)
-        self.total_lat_label.setText(f"⚡ Total Latency: {total_lat:.0f} ms")
+        self.total_lat_label.setText(f"Total Latency: {total_lat:.0f} ms")
         
         target_met = total_lat < 1500
         target_color = "#34d399" if target_met else "#f59e0b"
-        self.target_badge.setText("Target: <1.5s ✓" if target_met else "Target: <1.5s (High)")
+        self.target_badge.setText("Target: <1.5s (PASSED)" if target_met else "Target: <1.5s")
         self.target_badge.setStyleSheet(f"color: {target_color}; font-weight: bold;")
 
-        # Add to conversation history view
         turn = self.manager.history[-1] if self.manager.history else None
         if turn:
             self.conversation_view.add_turn({
@@ -540,17 +688,16 @@ class MainWindow(QMainWindow):
                 "time_str": time.strftime("%H:%M:%S", time.localtime(turn.timestamp))
             })
 
-        self.vad_indicator.setText("● Listening")
-        self.vad_indicator.setStyleSheet("color: #10b981; font-weight: bold;")
-        self.status_label.setText("Ready for next utterance.")
+        self.vad_badge.setText("MIC LISTENING")
+        self.vad_badge.setStyleSheet("background-color: #064e3b; color: #34d399; font-weight: bold; border-radius: 6px;")
+        self.status_label.setText("Translation complete. Ready for next utterance.")
 
     @Slot(str)
     def on_error_occurred(self, err_msg: str):
         self.status_label.setText(f"Error: {err_msg}")
-        self.status_label.setStyleSheet("color: #f87171;")
+        self.status_label.setStyleSheet("color: #f87171; font-weight: bold;")
 
     def closeEvent(self, event):
-        """Clean shutdown of background threads and audio streams."""
         self.manager.pipeline.stop_listening()
         self.manager.pipeline.playback.stop()
         event.accept()
