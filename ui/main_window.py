@@ -46,7 +46,13 @@ class PipelineWorker(QThread):
         pipeline.on_transcription = lambda text, lang, lat: self.transcription_ready.emit(text, lang, lat)
         pipeline.on_translation = lambda text, lat: self.translation_ready.emit(text, lat)
         pipeline.on_synthesis = lambda audio, sr, lat: self.synthesis_ready.emit(audio, sr, lat)
-        pipeline.on_pipeline_done = lambda metrics: self.pipeline_completed.emit(metrics)
+        
+        orig_done = self.manager._handle_pipeline_result
+        def _on_done(metrics):
+            if orig_done:
+                orig_done(metrics)
+            self.pipeline_completed.emit(metrics)
+        pipeline.on_pipeline_done = _on_done
         pipeline.on_error = lambda err: self.error_occurred.emit(err)
 
     def start_listening(self):
@@ -525,12 +531,12 @@ class MainWindow(QMainWindow):
             self.vad_badge.setText("MIC ACTIVE")
             self.vad_badge.setStyleSheet("background-color: #064e3b; color: #34d399; font-weight: bold; border-radius: 6px;")
         else:
-            pipeline.stop_listening()
+            pipeline.stop_listening(flush=True)
             self.mic_btn.setText("▶  START LISTENING")
             self.mic_btn.setProperty("recording", False)
             self.mic_btn.style().unpolish(self.mic_btn)
             self.mic_btn.style().polish(self.mic_btn)
-            self.status_label.setText("Microphone stopped. Press 'START LISTENING' to resume.")
+            self.status_label.setText("Microphone stopped. Processing any pending speech...")
             self.vad_badge.setText("MIC IDLE")
             self.vad_badge.setStyleSheet("background-color: #1f2937; color: #64748b; font-weight: bold; border-radius: 6px;")
             self.vu_bar.setValue(0)
@@ -546,7 +552,7 @@ class MainWindow(QMainWindow):
     def on_ptt_released(self):
         pipeline = self.manager.pipeline
         if pipeline.capture.is_recording:
-            pipeline.stop_listening()
+            pipeline.stop_listening(flush=True)
             self.status_label.setText("Push-to-Talk released. Processing speech...")
             self.vad_badge.setText("PROCESSING")
             self.vad_badge.setStyleSheet("background-color: #78350f; color: #f59e0b; font-weight: bold; border-radius: 6px;")
@@ -643,14 +649,16 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def on_speech_detected(self):
-        self.vad_badge.setText("SPEECH DETECTED")
+        self.vad_badge.setText("SPEAKING...")
         self.vad_badge.setStyleSheet("background-color: #92400e; color: #fbbf24; font-weight: bold; border-radius: 6px;")
-        self.status_label.setText("Speech detected, processing audio...")
+        self.status_label.setText("Voice detected! Listening to speech...")
 
     @Slot(str, str, float)
     def on_transcription_ready(self, text: str, lang: str, lat: float):
         self.orig_text.setPlainText(text)
         self.stt_lat_label.setText(f"STT: {lat:.0f} ms")
+        self.vad_badge.setText("TRANSLATING...")
+        self.vad_badge.setStyleSheet("background-color: #1e3a8a; color: #60a5fa; font-weight: bold; border-radius: 6px;")
         self.status_label.setText("Transcribed speech. Translating text...")
 
     @Slot(str, float)

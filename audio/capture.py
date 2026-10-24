@@ -47,8 +47,14 @@ class AudioCapture:
         if status:
             logger.warning(f"Audio stream status: {status}")
         
-        # indata is (frames, channels), extract mono channel
-        chunk = indata[:, 0].copy()
+        # If multichannel (e.g. 4-channel laptop mic array), average across channels for full signal
+        if indata.ndim > 1:
+            if indata.shape[1] > 1:
+                chunk = np.mean(indata, axis=1).astype(np.float32)
+            else:
+                chunk = indata[:, 0].copy()
+        else:
+            chunk = indata.copy()
         
         if self.level_callback:
             try:

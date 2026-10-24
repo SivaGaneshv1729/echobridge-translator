@@ -3,6 +3,11 @@ Verifies that all models run with zero internet connectivity and no cloud fallba
 """
 import os
 import sys
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+except Exception:
+    pass
 import socket
 import pytest
 import numpy as np

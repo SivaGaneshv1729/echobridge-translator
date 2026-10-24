@@ -1,5 +1,7 @@
-"""End-to-End Real-Time Offline Speech Translation Pipeline."""
+"""End-to-End Real-Time Offline Speech Translation Pipeline with Non-Blocking Worker Queue."""
 import time
+import queue
+import threading
 import logging
 from typing import Optional, Callable, Dict, Any
 import numpy as np
@@ -38,24 +40,34 @@ class TranslationPipeline:
         self.on_pipeline_done: Optional[Callable[[Dict[str, Any]], None]] = None
         self.on_error: Optional[Callable[[str], None]] = None
 
-        # Initialize components
+        # Initialize audio and VAD
         logger.info("Initializing EchoBridge Pipeline components...")
-        self.vad = SileroVAD(f"{models_dir}/vad/silero_vad.onnx")
-        self.segmenter = UtteranceSegmenter(self.vad)
+        self.vad = SileroVAD(f"{models_dir}/vad/silero_vad.onnx", threshold=0.35)
+        self.segmenter = UtteranceSegmenter(self.vad, min_speech_duration_ms=150, min_silence_duration_ms=400, speech_pad_ms=300)
+        self.segmenter.on_speech_started = self._on_speech_started
+        
         self.capture = AudioCapture(device_index=input_device_index, chunk_callback=self._on_audio_chunk)
         self.capture.level_callback = lambda lvl: self.on_audio_level(lvl) if self.on_audio_level else None
         self.playback = AudioPlayback(device_index=output_device_index)
         
+        # Initialize engines
         self.stt = SpeechRecognizer(model_size=stt_size)
         self.translation = TranslatorEngine(f"{models_dir}/translation")
         self.tts = TTSEngine(f"{models_dir}/tts")
 
-        # Preload target engines
+        # Preload models
         self.translation.load_pair(self.source_lang, self.target_lang)
         self.translation.load_pair(self.target_lang, self.source_lang)
         self.tts.load_voice(self.target_lang)
         self.tts.load_voice(self.source_lang)
-        logger.info("EchoBridge Pipeline initialized and models preloaded.")
+
+        # Worker thread for non-blocking asynchronous utterance processing
+        self._utterance_queue = queue.Queue()
+        self._worker_running = True
+        self._worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
+        self._worker_thread.start()
+
+        logger.info("EchoBridge Pipeline initialized and worker thread running.")
 
     def set_languages(self, source: str, target: str):
         """Update active translation direction."""
@@ -69,6 +81,14 @@ class TranslationPipeline:
         """Swap source and target languages."""
         self.set_languages(self.target_lang, self.source_lang)
 
+    def _on_speech_started(self):
+        """Invoked immediately when speech is detected (start of utterance)."""
+        if self.on_speech_detected:
+            try:
+                self.on_speech_detected()
+            except Exception as e:
+                logger.error(f"Error in on_speech_detected: {e}")
+
     def _on_audio_chunk(self, chunk_512: np.ndarray):
         """Callback invoked for every 512-sample audio chunk from microphone."""
         # Acoustic feedback prevention: Do not process audio while speakers are playing translated output
@@ -78,18 +98,44 @@ class TranslationPipeline:
 
         utterance = self.segmenter.process_chunk(chunk_512)
         if utterance is not None:
-            self.process_utterance(utterance)
+            # Push to background worker queue so PortAudio callback returns in <0.1ms
+            self._utterance_queue.put(utterance)
+
+    def _worker_loop(self):
+        """Dedicated background thread loop that runs STT, MT, and TTS without freezing audio capture."""
+        while self._worker_running:
+            try:
+                utterance = self._utterance_queue.get(timeout=0.2)
+                if utterance is not None:
+                    self.process_utterance(utterance)
+                self._utterance_queue.task_done()
+            except queue.Empty:
+                continue
+            except Exception as e:
+                logger.error(f"Error in pipeline worker loop: {e}", exc_info=True)
 
     def process_utterance(self, audio_data: np.ndarray) -> Optional[Dict[str, Any]]:
         """
         Process a single completed speech utterance through the full translation pipeline:
         Audio -> STT -> MT -> TTS -> Playback
         """
-        if audio_data is None or len(audio_data) < 1600: # Ignore very short transients (<100ms)
+        if audio_data is None or len(audio_data) < 2400: # Need at least 150ms of audio
+            logger.info(f"Ignored short audio chunk ({len(audio_data) if audio_data is not None else 0} samples)")
             return None
 
+        # Add 150ms (2400 samples) of clean silence padding on both ends to eliminate Whisper edge artifacts
+        audio_data = np.pad(audio_data, (2400, 2400), mode="constant")
+
         t_start = time.perf_counter()
-        logger.info(f"Processing utterance ({len(audio_data)/16000:.2f}s of audio)...")
+        
+        # Digital Gain Boost (AGC) for quiet laptop microphones
+        max_amp = float(np.max(np.abs(audio_data)))
+        if max_amp > 1e-4 and max_amp < 0.3:
+            gain = min(15.0, 0.65 / max_amp)
+            audio_data = (audio_data * gain).astype(np.float32)
+            logger.info(f"Applied AGC gain boost: {gain:.1f}x (original peak: {max_amp:.3f})")
+
+        logger.info(f"Processing speech utterance ({len(audio_data)/16000:.2f}s of audio)...")
 
         try:
             # 1. Speech Recognition
@@ -98,7 +144,7 @@ class TranslationPipeline:
                 language=self.source_lang
             )
             if not orig_text.strip():
-                logger.info("Transcribed text was empty, skipping.")
+                logger.info("Transcribed text was empty (no clear speech recognized).")
                 return None
 
             if self.on_transcription:
@@ -163,7 +209,13 @@ class TranslationPipeline:
         self.segmenter.reset()
         self.capture.start()
 
-    def stop_listening(self):
-        """Stop microphone audio capture."""
+    def stop_listening(self, flush: bool = True):
+        """Stop microphone audio capture. If flush=True, process any pending speech recorded before stopping."""
         self.capture.stop()
-        self.segmenter.reset()
+        if flush:
+            flushed_utterance = self.segmenter.flush()
+            if flushed_utterance is not None and len(flushed_utterance) >= 2400:
+                logger.info(f"Flushing {len(flushed_utterance)/16000:.2f}s of audio on stop_listening")
+                self._utterance_queue.put(flushed_utterance)
+        else:
+            self.segmenter.reset()
