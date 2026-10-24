@@ -1,0 +1,77 @@
+{
+  "timestamp": "2026-10-24 18:33:18",
+  "hardware": {
+    "os": "Windows 11",
+    "architecture": "AMD64",
+    "cpu_cores": 8,
+    "total_ram_gb": 15.61,
+    "available_ram_gb": 4.6,
+    "free_disk_gb": 271.29,
+    "gpu_acceleration": "CPU only (AVX2 INT8 quantized execution recommended)"
+  },
+  "results": {
+    "vad": {
+      "model": "Silero VAD ONNX",
+      "license": "MIT",
+      "load_time_ms": 82.64,
+      "chunk_latency_median_ms": 0.24,
+      "chunk_latency_p95_ms": 1.13,
+      "ram_usage_mb": 18.48
+    },
+    "stt": {
+      "model": "Faster-Whisper-base-int8",
+      "license": "MIT",
+      "load_time_ms": 1340.12,
+      "transcribe_2s_latency_median_ms": 1181.53,
+      "ram_usage_mb": 159.1
+    },
+    "translation": {
+      "model": "CTranslate2 INT8 (Argos en <-> ja)",
+      "license": "MIT / CC",
+      "en_to_ja_latency_median_ms": 74.35,
+      "ja_to_en_latency_median_ms": 60.43,
+      "en_to_ja_pairs": [
+        [
+          "Hello, how are you today?",
+          "今日はどうですか?"
+        ],
+        [
+          "Where is the nearest train station?",
+          "最寄駅はどこですか?"
+        ],
+        [
+          "Thank you very much for your assistance.",
+          "大変お世話になりました。"
+        ]
+      ],
+      "ja_to_en_pairs": [
+        [
+          "こんにちは、お元気ですか？",
+          "Hello!"
+        ],
+        [
+          "最寄りの駅はどこですか？",
+          "Where is the ⁇  station?"
+        ],
+        [
+          "お手伝いいただきありがとうございます。",
+          "Thank you for your support."
+        ]
+      ],
+      "ram_usage_mb": 281.83
+    },
+    "tts": {
+      "model": "Piper TTS (en: amy-low, ja: hi_fi_captain-medium)",
+      "license": "MIT / Public Domain",
+      "en_synthesis_median_ms": 142.76,
+      "ja_synthesis_median_ms": 244.83,
+      "ram_usage_mb": 404.26
+    }
+  },
+  "estimated_end_to_end_latency_ms": {
+    "en_to_ja": 1540.95,
+    "ja_to_en": 1424.96,
+    "target_1500ms_met": false
+  },
+  "total_pipeline_ram_mb": 863.67
+}
