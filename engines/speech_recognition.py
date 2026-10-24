@@ -22,12 +22,23 @@ class SpeechRecognizer:
         
         logger.info(f"Loading WhisperModel({model_size}, compute_type={compute_type}, threads={cpu_threads})...")
         t0 = time.perf_counter()
-        self.model = WhisperModel(
-            model_size,
-            device=device,
-            compute_type=compute_type,
-            cpu_threads=cpu_threads
-        )
+        try:
+            self.model = WhisperModel(
+                model_size,
+                device=device,
+                compute_type=compute_type,
+                cpu_threads=cpu_threads,
+                local_files_only=True
+            )
+        except Exception as e:
+            logger.info(f"Local files only load failed ({e}), attempting initial download...")
+            self.model = WhisperModel(
+                model_size,
+                device=device,
+                compute_type=compute_type,
+                cpu_threads=cpu_threads,
+                local_files_only=False
+            )
         logger.info(f"WhisperModel loaded in {(time.perf_counter() - t0)*1000:.2f} ms")
 
     def transcribe(

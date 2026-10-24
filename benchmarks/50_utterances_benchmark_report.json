@@ -1,0 +1,520 @@
+{
+  "timestamp": "2026-10-24 18:46:38",
+  "total_utterances_tested": 50,
+  "en_to_ja": {
+    "median_ms": 1537.36,
+    "p95_ms": 1676.7,
+    "min_ms": 1429.13,
+    "max_ms": 1805.03
+  },
+  "ja_to_en": {
+    "median_ms": 1520.59,
+    "p95_ms": 8495.71,
+    "min_ms": 1257.56,
+    "max_ms": 8618.7
+  },
+  "en_ja_details": [
+    {
+      "id": 1,
+      "input": "Hello, how are you today?",
+      "transcription": "Hello, how are you today?",
+      "translation": "今日はどうですか?",
+      "stt_ms": 1246.58,
+      "mt_ms": 76.13,
+      "tts_ms": 182.16,
+      "total_ms": 1505.05
+    },
+    {
+      "id": 2,
+      "input": "Where is the nearest train station?",
+      "transcription": "Where is the nearest train station?",
+      "translation": "最寄駅はどこですか?",
+      "stt_ms": 1552.4,
+      "mt_ms": 78.84,
+      "tts_ms": 173.67,
+      "total_ms": 1805.03
+    },
+    {
+      "id": 3,
+      "input": "Can you please help me find a doctor?",
+      "transcription": "Can you please help me find a doctor?",
+      "translation": "医師の診察をお願いできますか?",
+      "stt_ms": 1327.5,
+      "mt_ms": 81.54,
+      "tts_ms": 227.23,
+      "total_ms": 1636.36
+    },
+    {
+      "id": 4,
+      "input": "What time does the supermarket close?",
+      "transcription": "What time does the supermarket close?",
+      "translation": "スーパーマーケットが閉じる時間は?",
+      "stt_ms": 1250.47,
+      "mt_ms": 82.64,
+      "tts_ms": 206.73,
+      "total_ms": 1539.92
+    },
+    {
+      "id": 5,
+      "input": "I would like to order coffee please.",
+      "transcription": "I would like to order coffee please.",
+      "translation": "コーヒーを注文したいです。",
+      "stt_ms": 1319.68,
+      "mt_ms": 72.4,
+      "tts_ms": 195.6,
+      "total_ms": 1587.8
+    },
+    {
+      "id": 6,
+      "input": "How much does this cost?",
+      "transcription": "How much does this cost?",
+      "translation": "この費用はいくらかかりますか?",
+      "stt_ms": 1380.34,
+      "mt_ms": 66.41,
+      "tts_ms": 198.07,
+      "total_ms": 1644.92
+    },
+    {
+      "id": 7,
+      "input": "Nice to meet you.",
+      "transcription": "Nice to meet you.",
+      "translation": "お会いするのはいいですね。",
+      "stt_ms": 1344.8,
+      "mt_ms": 107.52,
+      "tts_ms": 229.03,
+      "total_ms": 1681.44
+    },
+    {
+      "id": 8,
+      "input": "Could you speak a little slower please?",
+      "transcription": "Could you speak a little slower please?",
+      "translation": "少し遅くても話せますか?",
+      "stt_ms": 1311.28,
+      "mt_ms": 75.42,
+      "tts_ms": 187.81,
+      "total_ms": 1574.6
+    },
+    {
+      "id": 9,
+      "input": "Where is the hotel lobby?",
+      "transcription": "Where is the hotel lobby?",
+      "translation": "ホテルのロビーはどこにありますか?",
+      "stt_ms": 1160.21,
+      "mt_ms": 65.42,
+      "tts_ms": 232.09,
+      "total_ms": 1457.8
+    },
+    {
+      "id": 10,
+      "input": "Thank you very much for your help.",
+      "transcription": "Thank you very much for your help.",
+      "translation": "皆様のお越しをお待ちしております。",
+      "stt_ms": 1240.24,
+      "mt_ms": 66.3,
+      "tts_ms": 223.0,
+      "total_ms": 1529.72
+    },
+    {
+      "id": 11,
+      "input": "Is there a pharmacy nearby?",
+      "transcription": "Is there a pharmacy nearby?",
+      "translation": "近くに薬局はありますか?",
+      "stt_ms": 1246.56,
+      "mt_ms": 59.39,
+      "tts_ms": 203.76,
+      "total_ms": 1509.82
+    },
+    {
+      "id": 12,
+      "input": "I need a taxi to the airport.",
+      "transcription": "I need a taxi to the airport.",
+      "translation": "空港へタクシーが必要です。",
+      "stt_ms": 1235.68,
+      "mt_ms": 74.45,
+      "tts_ms": 215.45,
+      "total_ms": 1525.7
+    },
+    {
+      "id": 13,
+      "input": "Do you accept credit cards here?",
+      "transcription": "Do you accept credit cards here?",
+      "translation": "クレジットカードは使えますか?",
+      "stt_ms": 1230.04,
+      "mt_ms": 62.95,
+      "tts_ms": 162.04,
+      "total_ms": 1455.12
+    },
+    {
+      "id": 14,
+      "input": "What is the weather forecast for tomorrow?",
+      "transcription": "What is the weather forecast for tomorrow?",
+      "translation": "明日の天気は?",
+      "stt_ms": 1238.12,
+      "mt_ms": 56.9,
+      "tts_ms": 133.98,
+      "total_ms": 1429.13
+    },
+    {
+      "id": 15,
+      "input": "I have a reservation under my name.",
+      "transcription": "I have a reservation under my name.",
+      "translation": "お名前でご予約ください。",
+      "stt_ms": 1269.54,
+      "mt_ms": 66.9,
+      "tts_ms": 172.44,
+      "total_ms": 1508.96
+    },
+    {
+      "id": 16,
+      "input": "Excuse me, where is the restroom?",
+      "transcription": "Excuse me, where is the restroom?",
+      "translation": "休憩室はどこですか?",
+      "stt_ms": 1290.24,
+      "mt_ms": 68.44,
+      "tts_ms": 173.23,
+      "total_ms": 1531.99
+    },
+    {
+      "id": 17,
+      "input": "Can you recommend a good local restaurant?",
+      "transcription": "Can you recommend a good local restaurant?",
+      "translation": "地元のレストランがおすすめですか?",
+      "stt_ms": 1257.83,
+      "mt_ms": 62.4,
+      "tts_ms": 217.02,
+      "total_ms": 1537.36
+    },
+    {
+      "id": 18,
+      "input": "The train will arrive in five minutes.",
+      "transcription": "The train will arrive in five minutes.",
+      "translation": "電車は5分で到着します。",
+      "stt_ms": 1229.94,
+      "mt_ms": 74.56,
+      "tts_ms": 184.35,
+      "total_ms": 1488.94
+    },
+    {
+      "id": 19,
+      "input": "Please call an ambulance immediately.",
+      "transcription": "Please call an ambulance immediately.",
+      "translation": "すぐに救急車にお電話ください。",
+      "stt_ms": 1230.72,
+      "mt_ms": 72.59,
+      "tts_ms": 207.52,
+      "total_ms": 1510.95
+    },
+    {
+      "id": 20,
+      "input": "Have a wonderful weekend ahead.",
+      "transcription": "Have a wonderful weekend ahead.",
+      "translation": "先日は素敵な週末をお過ごしください。",
+      "stt_ms": 1282.88,
+      "mt_ms": 81.65,
+      "tts_ms": 247.45,
+      "total_ms": 1612.09
+    },
+    {
+      "id": 21,
+      "input": "Where can I buy a subway ticket?",
+      "transcription": "Where can I buy a subway ticket?",
+      "translation": "地下鉄のチケットはどこで購入できますか?",
+      "stt_ms": 1276.5,
+      "mt_ms": 80.73,
+      "tts_ms": 300.42,
+      "total_ms": 1657.74
+    },
+    {
+      "id": 22,
+      "input": "I am looking for the city museum.",
+      "transcription": "I'm looking for the City Museum.",
+      "translation": "シティーミュージアムを探しています。",
+      "stt_ms": 1341.17,
+      "mt_ms": 74.94,
+      "tts_ms": 184.13,
+      "total_ms": 1600.35
+    },
+    {
+      "id": 23,
+      "input": "Is Wi-Fi available in this room?",
+      "transcription": "is why Fire Available in this room.",
+      "translation": "こちらのお部屋で火が利用できるのはなぜか。",
+      "stt_ms": 1261.65,
+      "mt_ms": 104.48,
+      "tts_ms": 279.4,
+      "total_ms": 1645.63
+    },
+    {
+      "id": 24,
+      "input": "Could you write down the address for me?",
+      "transcription": "Could you write down the address for me?",
+      "translation": "アドレスを書いてもらえますか?",
+      "stt_ms": 1253.51,
+      "mt_ms": 67.13,
+      "tts_ms": 176.46,
+      "total_ms": 1497.19
+    },
+    {
+      "id": 25,
+      "input": "I am very happy to be here today.",
+      "transcription": "I am very happy to be here today.",
+      "translation": "今日は大変お世話になりました。",
+      "stt_ms": 1241.93,
+      "mt_ms": 60.18,
+      "tts_ms": 236.32,
+      "total_ms": 1538.56
+    }
+  ],
+  "ja_en_details": [
+    {
+      "id": 1,
+      "input": "こんにちは、お元気ですか？",
+      "transcription": "",
+      "translation": "",
+      "stt_ms": 1332.68,
+      "mt_ms": 0.0,
+      "tts_ms": 0.0,
+      "total_ms": 1332.71
+    },
+    {
+      "id": 2,
+      "input": "最寄りの駅はどこですか？",
+      "transcription": "",
+      "translation": "",
+      "stt_ms": 1289.89,
+      "mt_ms": 0.0,
+      "tts_ms": 0.0,
+      "total_ms": 1289.92
+    },
+    {
+      "id": 3,
+      "input": "医者を探すのを手伝っていただけますか？",
+      "transcription": "スタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッ",
+      "translation": "Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff",
+      "stt_ms": 3217.13,
+      "mt_ms": 1205.52,
+      "tts_ms": 3892.83,
+      "total_ms": 8316.49
+    },
+    {
+      "id": 4,
+      "input": "スーパーは何時に閉まりますか？",
+      "transcription": "スタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルーのスタッフルー",
+      "translation": "Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff Loo Staff",
+      "stt_ms": 3414.18,
+      "mt_ms": 842.31,
+      "tts_ms": 1936.42,
+      "total_ms": 6193.14
+    },
+    {
+      "id": 5,
+      "input": "コーヒーを注文したいのですが。",
+      "transcription": "ドラゴンのスタッフルを使って、 スタッフルを使って、 スタッフルを使って、 スタッフルを使って、 スタッフルを使って、 スタッフルを使って、 スタッフルを使って、 スタッフルを使って、 スタッフルを使って、",
+      "translation": "Using a  ⁇ 's staffle, using a staffle, using a staffle, using a staffle, using a staffle, using a staffle, using a staffle,",
+      "stt_ms": 2312.68,
+      "mt_ms": 369.96,
+      "tts_ms": 562.41,
+      "total_ms": 3245.14
+    },
+    {
+      "id": 6,
+      "input": "これはいくらですか？",
+      "transcription": "スタッフの音がある",
+      "translation": "Staff sound",
+      "stt_ms": 1390.63,
+      "mt_ms": 38.2,
+      "tts_ms": 91.68,
+      "total_ms": 1520.59
+    },
+    {
+      "id": 7,
+      "input": "はじめまして、よろしくお願いします。",
+      "transcription": "",
+      "translation": "",
+      "stt_ms": 1385.01,
+      "mt_ms": 0.0,
+      "tts_ms": 0.0,
+      "total_ms": 1385.06
+    },
+    {
+      "id": 8,
+      "input": "もう少しゆっくり話していただけますか？",
+      "transcription": "スタッフルを使って、 スタッフルを使って、 スタッフルを使って、 スタッフルを使って、 スタッフルを使って、 スタッフルを使って、 スタッフルを使って、 スタッフルを使って、 スタッフルを使って、",
+      "translation": "Using the staffl, using the staffl, using the staffl, using the staffl, using the staffl, using the staffl, using the staffl,",
+      "stt_ms": 2062.07,
+      "mt_ms": 294.14,
+      "tts_ms": 519.72,
+      "total_ms": 2876.02
+    },
+    {
+      "id": 9,
+      "input": "ホテルのロビーはどこですか？",
+      "transcription": "スティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティックスティ",
+      "translation": "Stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick stick",
+      "stt_ms": 3235.25,
+      "mt_ms": 1364.67,
+      "tts_ms": 4017.64,
+      "total_ms": 8618.7
+    },
+    {
+      "id": 10,
+      "input": "手伝ってくれてどうもありがとう。",
+      "transcription": "スタッフルの音が 出てくる スタッフルの音が 出てくる スタッフルの音が 出てくる スタッフルの音が 出てくる スタッフルの音が 出てくる スタッフルの音が 出てくる スタッフルの音が 出てくる スタッフルの音が 出てくる",
+      "translation": "The sound of the staff will come out the sound of the staff. The sound of the staff will come out the sound of the staff. The sound of the staff will come out the sound of the staff.",
+      "stt_ms": 2350.78,
+      "mt_ms": 361.42,
+      "tts_ms": 773.52,
+      "total_ms": 3485.83
+    },
+    {
+      "id": 11,
+      "input": "近くに薬局はありますか？",
+      "transcription": "",
+      "translation": "",
+      "stt_ms": 1320.55,
+      "mt_ms": 0.0,
+      "tts_ms": 0.0,
+      "total_ms": 1320.57
+    },
+    {
+      "id": 12,
+      "input": "空港までのタクシーが必要です。",
+      "transcription": "",
+      "translation": "",
+      "stt_ms": 1307.54,
+      "mt_ms": 0.0,
+      "tts_ms": 0.0,
+      "total_ms": 1307.58
+    },
+    {
+      "id": 13,
+      "input": "ここではクレジットカードは使えますか？",
+      "transcription": "スタッフルの音が出ている",
+      "translation": "The sound of the staff",
+      "stt_ms": 1306.31,
+      "mt_ms": 68.1,
+      "tts_ms": 119.58,
+      "total_ms": 1494.08
+    },
+    {
+      "id": 14,
+      "input": "明日の天気予報はどうですか？",
+      "transcription": "おじっくりの音がある",
+      "translation": "There is a familiar sound",
+      "stt_ms": 1301.25,
+      "mt_ms": 57.08,
+      "tts_ms": 133.28,
+      "total_ms": 1491.72
+    },
+    {
+      "id": 15,
+      "input": "私の名前で予約があります。",
+      "transcription": "スタッフルシュアルの音が",
+      "translation": "The sound of the staff surreal is",
+      "stt_ms": 1333.06,
+      "mt_ms": 85.41,
+      "tts_ms": 161.25,
+      "total_ms": 1579.81
+    },
+    {
+      "id": 16,
+      "input": "すみません、お手洗いはどこですか？",
+      "transcription": "スタッフの音が出てくる",
+      "translation": "The sound of the staff",
+      "stt_ms": 1301.61,
+      "mt_ms": 50.7,
+      "tts_ms": 110.03,
+      "total_ms": 1462.4
+    },
+    {
+      "id": 17,
+      "input": "おいしい地元のレストランを教えてください。",
+      "transcription": "",
+      "translation": "",
+      "stt_ms": 1257.52,
+      "mt_ms": 0.0,
+      "tts_ms": 0.0,
+      "total_ms": 1257.56
+    },
+    {
+      "id": 18,
+      "input": "電車は5分後に到着します。",
+      "transcription": "",
+      "translation": "",
+      "stt_ms": 1296.57,
+      "mt_ms": 0.0,
+      "tts_ms": 0.0,
+      "total_ms": 1296.61
+    },
+    {
+      "id": 19,
+      "input": "すぐに救急車を呼んでください。",
+      "transcription": "スタッフの音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が 音が",
+      "translation": "The sound of the staff is sound sound sound sound sound sound sound sound sound sound sound sound sound sound sound sound sound sound sound sound sound",
+      "stt_ms": 3189.99,
+      "mt_ms": 327.01,
+      "tts_ms": 633.46,
+      "total_ms": 4150.58
+    },
+    {
+      "id": 20,
+      "input": "よい週末をお過ごしください。",
+      "transcription": "スタッフの音が出てくる",
+      "translation": "The sound of the staff",
+      "stt_ms": 1281.41,
+      "mt_ms": 50.83,
+      "tts_ms": 118.02,
+      "total_ms": 1450.33
+    },
+    {
+      "id": 21,
+      "input": "地下鉄の切符はどこで買えますか？",
+      "transcription": "スタッフの音が出てくる スタッフの音が出てくる スタッフの音が出てくる スタッフの音が出てくる スタッフの音が出てくる スタッフの音が出てくる スタッフの音が出てくる",
+      "translation": "The sound of the staff comes out the sound of the staff. The sound of the staff is coming out. The sound of the staff comes out.",
+      "stt_ms": 1994.62,
+      "mt_ms": 256.23,
+      "tts_ms": 578.09,
+      "total_ms": 2829.06
+    },
+    {
+      "id": 22,
+      "input": "市立博物館を探しています。",
+      "transcription": "スタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッフのスタッ",
+      "translation": "Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff Staff",
+      "stt_ms": 3240.3,
+      "mt_ms": 1262.36,
+      "tts_ms": 4036.67,
+      "total_ms": 8540.51
+    },
+    {
+      "id": 23,
+      "input": "この部屋でWi-Fiは使えますか？",
+      "transcription": "スタッフの音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が、音が",
+      "translation": "Sound, sound, sound, sound, sound, sound, sound, sound",
+      "stt_ms": 3425.46,
+      "mt_ms": 227.43,
+      "tts_ms": 315.38,
+      "total_ms": 3968.38
+    },
+    {
+      "id": 24,
+      "input": "住所を書いていただけますか？",
+      "transcription": "",
+      "translation": "",
+      "stt_ms": 1321.08,
+      "mt_ms": 0.0,
+      "tts_ms": 0.0,
+      "total_ms": 1321.12
+    },
+    {
+      "id": 25,
+      "input": "今日ここに来られてとても嬉しいです。",
+      "transcription": "スタッフルの音が出てくる スタッフルの音が出てくる スタッフルの音が出てくる スタッフルの音が出てくる スタッフルの音が出てくる スタッフルの音が出てくる スタッフルの音が出てくる",
+      "translation": "The sound of the staff will come out the sound of the staff. The sound of the staff will come out the sound of the staff. The sound of the staff will come out.",
+      "stt_ms": 2032.01,
+      "mt_ms": 392.43,
+      "tts_ms": 673.43,
+      "total_ms": 3097.99
+    }
+  ]
+}
