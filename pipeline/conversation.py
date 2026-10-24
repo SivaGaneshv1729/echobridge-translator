@@ -73,13 +73,15 @@ class ConversationManager:
             self.on_turn_added(turn)
 
     def set_active_speaker_lang(self, speaker_lang: str):
-        """Set who is currently speaking (lang_a or lang_b). Target is automatically the other language."""
-        if speaker_lang == self.lang_a:
+        """Set who is currently speaking (lang_a, lang_b, or 'auto' for dynamic bilingual switching)."""
+        if speaker_lang == "auto":
+            target = "auto"
+        elif speaker_lang == self.lang_a:
             target = self.lang_b
         elif speaker_lang == self.lang_b:
             target = self.lang_a
         else:
-            raise ValueError(f"Unknown language: {speaker_lang}. Expected {self.lang_a} or {self.lang_b}")
+            raise ValueError(f"Unknown language: {speaker_lang}. Expected {self.lang_a}, {self.lang_b}, or 'auto'")
 
         self.pipeline.set_languages(speaker_lang, target)
         if self.on_active_direction_changed:
@@ -87,7 +89,9 @@ class ConversationManager:
 
     def toggle_direction(self):
         """Toggle translation direction between Lang A -> Lang B and Lang B -> Lang A."""
-        if self.pipeline.source_lang == self.lang_a:
+        if self.pipeline.source_lang == "auto":
+            self.set_active_speaker_lang(self.lang_a)
+        elif self.pipeline.source_lang == self.lang_a:
             self.set_active_speaker_lang(self.lang_b)
         else:
             self.set_active_speaker_lang(self.lang_a)

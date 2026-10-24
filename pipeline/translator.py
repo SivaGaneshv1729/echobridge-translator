@@ -56,10 +56,16 @@ class TranslationPipeline:
         self.tts = TTSEngine(f"{models_dir}/tts")
 
         # Preload models
-        self.translation.load_pair(self.source_lang, self.target_lang)
-        self.translation.load_pair(self.target_lang, self.source_lang)
-        self.tts.load_voice(self.target_lang)
-        self.tts.load_voice(self.source_lang)
+        if self.source_lang in ("auto", None) or self.target_lang in ("auto", None):
+            self.translation.load_pair("en", "ja")
+            self.translation.load_pair("ja", "en")
+            self.tts.load_voice("ja")
+            self.tts.load_voice("en")
+        else:
+            self.translation.load_pair(self.source_lang, self.target_lang)
+            self.translation.load_pair(self.target_lang, self.source_lang)
+            self.tts.load_voice(self.target_lang)
+            self.tts.load_voice(self.source_lang)
 
         # Worker thread for non-blocking asynchronous utterance processing
         self._utterance_queue = queue.Queue()
@@ -73,12 +79,21 @@ class TranslationPipeline:
         """Update active translation direction."""
         self.source_lang = source
         self.target_lang = target
-        self.translation.load_pair(source, target)
-        self.tts.load_voice(target)
-        logger.info(f"Pipeline active language pair set to: {source} -> {target}")
+        if source in ("auto", None) or target in ("auto", None):
+            self.translation.load_pair("en", "ja")
+            self.translation.load_pair("ja", "en")
+            self.tts.load_voice("ja")
+            self.tts.load_voice("en")
+            logger.info("Pipeline active language pair set to: AUTO-DETECT (EN ⇄ JA)")
+        else:
+            self.translation.load_pair(source, target)
+            self.tts.load_voice(target)
+            logger.info(f"Pipeline active language pair set to: {source} -> {target}")
 
     def swap_languages(self):
         """Swap source and target languages."""
+        if self.source_lang == "auto":
+            return
         self.set_languages(self.target_lang, self.source_lang)
 
     def _on_speech_started(self):
@@ -123,38 +138,60 @@ class TranslationPipeline:
             logger.info(f"Ignored short audio chunk ({len(audio_data) if audio_data is not None else 0} samples)")
             return None
 
-        # Add 150ms (2400 samples) of clean silence padding on both ends to eliminate Whisper edge artifacts
+        # 1. High-Pass Filter (75Hz) to remove mechanical desk thumps and low-frequency rumble
+        try:
+            import scipy.signal
+            sos = scipy.signal.butter(2, 75, btype='highpass', fs=16000, output='sos')
+            audio_data = scipy.signal.sosfilt(sos, audio_data).astype(np.float32)
+        except Exception:
+            pass
+
+        # 2. Add 150ms (2400 samples) of clean silence padding on both ends to eliminate Whisper edge artifacts
         audio_data = np.pad(audio_data, (2400, 2400), mode="constant")
 
         t_start = time.perf_counter()
         
-        # Digital Gain Boost (AGC) for quiet laptop microphones
+        # 3. Dynamic Peak Normalization / AGC for quiet laptop microphones
         max_amp = float(np.max(np.abs(audio_data)))
-        if max_amp > 1e-4 and max_amp < 0.3:
-            gain = min(15.0, 0.65 / max_amp)
-            audio_data = (audio_data * gain).astype(np.float32)
-            logger.info(f"Applied AGC gain boost: {gain:.1f}x (original peak: {max_amp:.3f})")
+        if max_amp > 1e-4:
+            gain = min(15.0, 0.75 / max_amp)
+            if gain > 1.05:
+                audio_data = np.clip(audio_data * gain, -1.0, 1.0).astype(np.float32)
+                logger.info(f"Applied audio precision boost: {gain:.1f}x (original peak: {max_amp:.3f})")
 
         logger.info(f"Processing speech utterance ({len(audio_data)/16000:.2f}s of audio)...")
 
         try:
-            # 1. Speech Recognition
+            # 1. Speech Recognition (Auto-detect language if in auto mode)
+            stt_lang = None if self.source_lang in ("auto", None) else self.source_lang
             orig_text, detected_lang, stt_ms = self.stt.transcribe(
                 audio_data,
-                language=self.source_lang
+                language=stt_lang
             )
             if not orig_text.strip():
                 logger.info("Transcribed text was empty (no clear speech recognized).")
                 return None
 
+            # Resolve actual source and target language for translation and speech synthesis
+            if self.source_lang in ("auto", None):
+                if detected_lang == "ja":
+                    act_source = "ja"
+                    act_target = "en"
+                else:
+                    act_source = "en"
+                    act_target = "ja"
+            else:
+                act_source = self.source_lang
+                act_target = self.target_lang
+
             if self.on_transcription:
-                self.on_transcription(orig_text, detected_lang, stt_ms)
+                self.on_transcription(orig_text, act_source, stt_ms)
 
             # 2. Machine Translation
             translated_text, mt_ms = self.translation.translate(
                 orig_text,
-                from_code=self.source_lang,
-                to_code=self.target_lang
+                from_code=act_source,
+                to_code=act_target
             )
             if not translated_text.strip():
                 logger.info("Translated text was empty, skipping.")
@@ -166,7 +203,7 @@ class TranslationPipeline:
             # 3. Text-to-Speech Synthesis
             audio_bytes, sample_rate, tts_ms = self.tts.synthesize(
                 translated_text,
-                lang=self.target_lang
+                lang=act_target
             )
 
             if self.on_synthesis:
@@ -182,8 +219,8 @@ class TranslationPipeline:
                 "original_text": orig_text,
                 "detected_language": detected_lang,
                 "translated_text": translated_text,
-                "source_language": self.source_lang,
-                "target_language": self.target_lang,
+                "source_language": act_source,
+                "target_language": act_target,
                 "audio_duration_s": round(len(audio_data) / 16000, 2),
                 "stt_latency_ms": round(stt_ms, 2),
                 "mt_latency_ms": round(mt_ms, 2),
@@ -191,7 +228,7 @@ class TranslationPipeline:
                 "total_e2e_latency_ms": round(total_ms, 2)
             }
 
-            logger.info(f"Pipeline Completed: '{orig_text}' -> '{translated_text}' [Total: {total_ms:.1f}ms (STT: {stt_ms:.1f}ms, MT: {mt_ms:.1f}ms, TTS: {tts_ms:.1f}ms)]")
+            logger.info(f"Pipeline Completed: [{act_source} -> {act_target}] '{orig_text}' -> '{translated_text}' [Total: {total_ms:.1f}ms (STT: {stt_ms:.1f}ms, MT: {mt_ms:.1f}ms, TTS: {tts_ms:.1f}ms)]")
 
             if self.on_pipeline_done:
                 self.on_pipeline_done(metrics)

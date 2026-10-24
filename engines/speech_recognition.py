@@ -46,7 +46,8 @@ class SpeechRecognizer:
         audio_data: np.ndarray,
         language: Optional[str] = None,
         beam_size: int = 1,
-        temperature: float = 0.0
+        temperature: float = 0.0,
+        initial_prompt: Optional[str] = None
     ) -> Tuple[str, str, float]:
         """
         Transcribe audio numpy array (16kHz mono float32).
@@ -56,19 +57,38 @@ class SpeechRecognizer:
             return "", language or "unknown", 0.0
 
         t0 = time.perf_counter()
+
+        # Context prompt to maximize accuracy and proper punctuation
+        if initial_prompt is None:
+            if language == "en":
+                initial_prompt = "Hello, this is a clear conversational dialogue."
+            elif language == "ja":
+                initial_prompt = "こんにちは、よろしくお願いします。"
+            else:
+                initial_prompt = "Hello, こんにちは, conversational speech translation."
         
         segments, info = self.model.transcribe(
             audio_data,
             language=language,
             beam_size=beam_size,
             temperature=temperature,
+            initial_prompt=initial_prompt,
             condition_on_previous_text=False,
             vad_filter=False # VAD is already handled upstream
         )
         
         text_segments = [s.text.strip() for s in segments if s.text.strip()]
         full_text = " ".join(text_segments).strip()
+        
         detected_lang = info.language if info else (language or "unknown")
+        
+        # In bilingual mode (EN <-> JA), if language detection picks an outlier code due to ambient noise,
+        # resolve directly between en and ja using their probabilities
+        if language is None and info and hasattr(info, "all_language_probs") and info.all_language_probs:
+            probs = dict(info.all_language_probs)
+            if detected_lang not in ("en", "ja"):
+                detected_lang = "ja" if probs.get("ja", 0) > probs.get("en", 0) else "en"
+
         latency_ms = (time.perf_counter() - t0) * 1000
 
         logger.debug(f"Transcribed ({detected_lang}) in {latency_ms:.2f}ms: '{full_text}'")

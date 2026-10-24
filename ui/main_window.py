@@ -72,7 +72,7 @@ class MainWindow(QMainWindow):
         self.resize(1060, 780)
         self.setMinimumSize(900, 650)
 
-        # Initialize conversation manager and background worker
+        # Initialize conversation manager and background worker with Auto-Detect as default
         self.manager = ConversationManager(
             lang_a=self.config.get("general", {}).get("source_language", "en"),
             lang_b=self.config.get("general", {}).get("target_language", "ja"),
@@ -80,6 +80,8 @@ class MainWindow(QMainWindow):
             stt_size=self.config.get("stt", {}).get("model_size", "base"),
             auto_playback=self.config.get("audio", {}).get("auto_playback", True)
         )
+        self.manager.pipeline.source_lang = "auto"
+        self.manager.pipeline.target_lang = "auto"
         self.worker = PipelineWorker(self.manager)
         self.connect_worker_signals()
 
@@ -157,29 +159,32 @@ class MainWindow(QMainWindow):
         lang_row.setSpacing(12)
 
         src_box = QVBoxLayout()
-        src_label = QLabel("INPUT LANGUAGE (SPEAKER)")
+        src_label = QLabel("TRANSLATION MODE")
         src_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #94a3b8;")
         self.src_combo = QComboBox()
         self.src_combo.setFixedHeight(38)
-        self.src_combo.addItem("English (United States)", "en")
-        self.src_combo.addItem("Japanese (Japan)", "ja")
+        self.src_combo.addItem("✨ AUTO-DETECT (EN ⇄ JA VICE VERSA)", "auto")
+        self.src_combo.addItem("English (United States) ➔ Japanese", "en")
+        self.src_combo.addItem("Japanese (Japan) ➔ English", "ja")
         self.src_combo.currentIndexChanged.connect(self.on_lang_combo_changed)
         src_box.addWidget(src_label)
         src_box.addWidget(self.src_combo)
 
-        self.swap_btn = QPushButton("⇄  SWAP LANGUAGES")
+        self.swap_btn = QPushButton("✨ AUTO ACTIVE")
         self.swap_btn.setObjectName("swapBtn")
         self.swap_btn.setFixedHeight(38)
         self.swap_btn.setFixedWidth(180)
         self.swap_btn.clicked.connect(self.on_swap_clicked)
 
         tgt_box = QVBoxLayout()
-        tgt_label = QLabel("TRANSLATE & SPEAK IN")
+        tgt_label = QLabel("OUTPUT SPOKEN LANGUAGE")
         tgt_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #38bdf8;")
         self.tgt_combo = QComboBox()
         self.tgt_combo.setFixedHeight(38)
+        self.tgt_combo.addItem("Automatic (Vice Versa)", "auto")
         self.tgt_combo.addItem("Japanese (Japan)", "ja")
         self.tgt_combo.addItem("English (United States)", "en")
+        self.tgt_combo.setEnabled(False)
         self.tgt_combo.currentIndexChanged.connect(self.on_lang_combo_changed)
         tgt_box.addWidget(tgt_label)
         tgt_box.addWidget(self.tgt_combo)
@@ -569,37 +574,43 @@ class MainWindow(QMainWindow):
             self.mute_btn.setStyleSheet("")
 
     def on_swap_clicked(self):
-        self.manager.toggle_direction()
-        src = self.manager.pipeline.source_lang
-        tgt = self.manager.pipeline.target_lang
-        idx_src = self.src_combo.findData(src)
-        idx_tgt = self.tgt_combo.findData(tgt)
-        if idx_src >= 0:
-            self.src_combo.blockSignals(True)
-            self.src_combo.setCurrentIndex(idx_src)
-            self.src_combo.blockSignals(False)
-        if idx_tgt >= 0:
-            self.tgt_combo.blockSignals(True)
-            self.tgt_combo.setCurrentIndex(idx_tgt)
-            self.tgt_combo.blockSignals(False)
-        
-        dir_label = "EN ➔ JA" if src == "en" else "JA ➔ EN"
-        self.status_label.setText(f"Language direction swapped: {dir_label}")
-        self.test_en_btn.setText(f"TEST SAMPLE ({dir_label})")
+        src = self.src_combo.currentData()
+        if src == "auto":
+            self.src_combo.setCurrentIndex(self.src_combo.findData("en"))
+        elif src == "en":
+            self.src_combo.setCurrentIndex(self.src_combo.findData("ja"))
+        else:
+            self.src_combo.setCurrentIndex(self.src_combo.findData("auto"))
 
     def on_lang_combo_changed(self):
         src = self.src_combo.currentData()
-        tgt = self.tgt_combo.currentData()
-        if src == tgt:
-            alt = "ja" if src == "en" else "en"
+        if src == "auto":
             self.tgt_combo.blockSignals(True)
-            self.tgt_combo.setCurrentIndex(self.tgt_combo.findData(alt))
+            self.tgt_combo.setCurrentIndex(self.tgt_combo.findData("auto"))
+            self.tgt_combo.setEnabled(False)
             self.tgt_combo.blockSignals(False)
-            tgt = alt
-        self.manager.pipeline.set_languages(src, tgt)
-        dir_label = f"{src.upper()} ➔ {tgt.upper()}"
-        self.status_label.setText(f"Active language direction: {dir_label}")
-        self.test_en_btn.setText(f"TEST SAMPLE ({dir_label})")
+            self.swap_btn.setText("✨ AUTO ACTIVE")
+            self.manager.set_active_speaker_lang("auto")
+            self.status_label.setText("Mode: Auto-Detect (EN ⇄ JA Vice Versa) — Speak in either language naturally!")
+            self.test_en_btn.setText("TEST SAMPLE (AUTO)")
+        elif src == "en":
+            self.tgt_combo.blockSignals(True)
+            self.tgt_combo.setEnabled(True)
+            self.tgt_combo.setCurrentIndex(self.tgt_combo.findData("ja"))
+            self.tgt_combo.blockSignals(False)
+            self.swap_btn.setText("⇄  SWAP (EN ➔ JA)")
+            self.manager.pipeline.set_languages("en", "ja")
+            self.status_label.setText("Active direction: EN ➔ JA (English to Japanese)")
+            self.test_en_btn.setText("TEST SAMPLE (EN ➔ JA)")
+        elif src == "ja":
+            self.tgt_combo.blockSignals(True)
+            self.tgt_combo.setEnabled(True)
+            self.tgt_combo.setCurrentIndex(self.tgt_combo.findData("en"))
+            self.tgt_combo.blockSignals(False)
+            self.swap_btn.setText("⇄  SWAP (JA ➔ EN)")
+            self.manager.pipeline.set_languages("ja", "en")
+            self.status_label.setText("Active direction: JA ➔ EN (Japanese to English)")
+            self.test_en_btn.setText("TEST SAMPLE (JA ➔ EN)")
 
     def open_settings(self):
         dialog = SettingsDialog(self.config_path, self)
@@ -627,11 +638,19 @@ class MainWindow(QMainWindow):
         """Simulate an instant spoken utterance to verify audio, STT, MT, and TTS."""
         self.status_label.setText("Generating test spoken utterance...")
         src = self.manager.pipeline.source_lang
-        test_phrase = "Hello, where is the nearest station?" if src == "en" else "こんにちは、駅はどこですか？"
+        if src in ("auto", None):
+            if not hasattr(self, "_test_counter"):
+                self._test_counter = 0
+            self._test_counter += 1
+            test_lang = "ja" if self._test_counter % 2 == 0 else "en"
+        else:
+            test_lang = src
+
+        test_phrase = "Hello, where is the nearest station?" if test_lang == "en" else "こんにちは、駅はどこですか？"
 
         # Generate audio using local TTS
         tts = TTSEngine("models_cache/tts")
-        pcm, sr, _ = tts.synthesize(test_phrase, src)
+        pcm, sr, _ = tts.synthesize(test_phrase, test_lang)
         audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
         if sr != 16000:
             import scipy.signal

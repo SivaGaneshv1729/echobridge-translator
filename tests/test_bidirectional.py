@@ -78,3 +78,30 @@ def test_toggle_direction(conversation_manager):
     conversation_manager.toggle_direction()
     assert conversation_manager.pipeline.source_lang == "en"
     assert conversation_manager.pipeline.target_lang == "ja"
+
+def test_automatic_vice_versa_translation(conversation_manager):
+    """Test automatic bidirectional translation without clicking swap language."""
+    tts = TTSEngine("models_cache/tts")
+    conversation_manager.set_active_speaker_lang("auto")
+    assert conversation_manager.pipeline.source_lang == "auto"
+
+    # Turn 1: English utterance without specifying language
+    pcm_en, _, _ = tts.synthesize("Where is the station?", "en")
+    audio_en = np.frombuffer(pcm_en, dtype=np.int16).astype(np.float32) / 32768.0
+    m_en = conversation_manager.pipeline.process_utterance(audio_en)
+    assert m_en is not None
+    assert m_en["source_language"] == "en"
+    assert m_en["target_language"] == "ja"
+    assert len(m_en["translated_text"]) > 0
+
+    # Turn 2: Japanese utterance immediately following without swapping
+    pcm_ja, sr_ja, _ = tts.synthesize("駅はあそこにあります。", "ja")
+    audio_ja = np.frombuffer(pcm_ja, dtype=np.int16).astype(np.float32) / 32768.0
+    if sr_ja != 16000:
+        import scipy.signal
+        audio_ja = scipy.signal.resample(audio_ja, int(len(audio_ja) * 16000 / sr_ja)).astype(np.float32)
+    m_ja = conversation_manager.pipeline.process_utterance(audio_ja)
+    assert m_ja is not None
+    assert m_ja["source_language"] == "ja"
+    assert m_ja["target_language"] == "en"
+    assert len(m_ja["translated_text"]) > 0

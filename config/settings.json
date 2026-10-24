@@ -37,8 +37,14 @@
   "translation": {
     "engine": "argostranslate",
     "installed_pairs": [
-      {"from": "en", "to": "ja"},
-      {"from": "ja", "to": "en"}
+      {
+        "from": "en",
+        "to": "ja"
+      },
+      {
+        "from": "ja",
+        "to": "en"
+      }
     ]
   },
   "tts": {
