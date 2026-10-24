@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# Models & Large weights
+models_cache/
+*.onnx
+*.bin
+*.argosmodel
+piper_voices/
+whisper_models/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs & IDE
+*.log
+.vscode/
+.idea/
+.DS_Store
+
+# Temporary audio
+scratch/
+test_output.wav
+temp_*.wav
