@@ -20,11 +20,15 @@ class SpeechRecognizer:
         self.compute_type = compute_type
         self.cpu_threads = cpu_threads
         
-        logger.info(f"Loading WhisperModel({model_size}, compute_type={compute_type}, threads={cpu_threads})...")
+        import os
+        local_dir = os.path.join("models_cache", "stt", f"faster-whisper-{model_size}")
+        model_target = local_dir if os.path.isdir(local_dir) else model_size
+
+        logger.info(f"Loading WhisperModel({model_target}, compute_type={compute_type}, threads={cpu_threads})...")
         t0 = time.perf_counter()
         try:
             self.model = WhisperModel(
-                model_size,
+                model_target,
                 device=device,
                 compute_type=compute_type,
                 cpu_threads=cpu_threads,
@@ -33,7 +37,7 @@ class SpeechRecognizer:
         except Exception as e:
             logger.info(f"Local files only load failed ({e}), attempting initial download...")
             self.model = WhisperModel(
-                model_size,
+                model_target,
                 device=device,
                 compute_type=compute_type,
                 cpu_threads=cpu_threads,

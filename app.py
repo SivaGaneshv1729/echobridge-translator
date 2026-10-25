@@ -28,6 +28,12 @@ def set_windows_app_id():
             pass
 
 def main():
+    if getattr(sys, 'frozen', False):
+        # When running as a compiled PyInstaller executable, ensure CWD is executable directory
+        exe_dir = os.path.dirname(sys.executable)
+        os.chdir(exe_dir)
+        sys.path.insert(0, exe_dir)
+
     set_windows_app_id()
     
     # Ensure high DPI scaling
