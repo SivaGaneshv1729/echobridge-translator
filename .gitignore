@@ -32,3 +32,7 @@ htmlcov/
 scratch/
 test_output.wav
 temp_*.wav
+
+# PyInstaller builds & distributions
+build/
+dist/
