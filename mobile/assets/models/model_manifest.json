@@ -1,0 +1,26 @@
+{
+  "app": "EchoBridge Mobile",
+  "version": "1.0.0",
+  "models": {
+    "vad": {
+      "name": "silero_vad.onnx",
+      "size_mb": 2.22,
+      "status": "ready"
+    },
+    "en_US-amy-low.onnx": {
+      "size_mb": 60.18,
+      "status": "ready"
+    },
+    "ja_JP-hi_fi_captain-medium.onnx": {
+      "size_mb": 73.2,
+      "status": "ready"
+    },
+    "whisper_stt": {
+      "engine": "sherpa-onnx-whisper-tiny-int8",
+      "encoder": "tiny-encoder.int8.onnx (~24 MB)",
+      "decoder": "tiny-decoder.int8.onnx (~15 MB)",
+      "tokens": "tokens.txt",
+      "status": "configured_for_download_or_bundle"
+    }
+  }
+}
