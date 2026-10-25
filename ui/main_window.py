@@ -11,7 +11,8 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QLabel, QPushButton, QComboBox, QFrame, 
     QProgressBar, QTextEdit, QTabWidget, QSplitter,
-    QStatusBar, QMessageBox, QGraphicsDropShadowEffect
+    QStatusBar, QMessageBox, QGraphicsDropShadowEffect,
+    QFileDialog
 )
 from PySide6.QtCore import Qt, QThread, Signal, Slot, QTimer
 from PySide6.QtGui import QFont, QColor, QPalette
@@ -19,6 +20,7 @@ from PySide6.QtGui import QFont, QColor, QPalette
 from pipeline.translator import TranslationPipeline
 from pipeline.conversation import ConversationManager, ConversationTurn
 from ui.conversation_view import ConversationView
+from ui.visualizer import SoundwaveVisualizer
 from ui.settings_view import SettingsDialog
 from engines.text_to_speech import TTSEngine
 
@@ -135,7 +137,17 @@ class MainWindow(QMainWindow):
             border: 1px solid #059669;
         """)
 
-        self.settings_btn = QPushButton("Settings")
+        self.export_btn = QPushButton("📥 Export Transcript")
+        self.export_btn.setObjectName("headerActionBtn")
+        self.export_btn.setFixedHeight(36)
+        self.export_btn.clicked.connect(self.export_transcript)
+
+        self.clear_btn = QPushButton("🗑 Clear")
+        self.clear_btn.setObjectName("headerActionBtn")
+        self.clear_btn.setFixedHeight(36)
+        self.clear_btn.clicked.connect(self.clear_conversation_history)
+
+        self.settings_btn = QPushButton("⚙ Settings")
         self.settings_btn.setObjectName("settingsBtn")
         self.settings_btn.setFixedHeight(36)
         self.settings_btn.clicked.connect(self.open_settings)
@@ -144,6 +156,8 @@ class MainWindow(QMainWindow):
         header.addSpacing(16)
         header.addWidget(badge)
         header.addStretch()
+        header.addWidget(self.export_btn)
+        header.addWidget(self.clear_btn)
         header.addWidget(self.settings_btn)
         main_layout.addLayout(header)
 
@@ -231,27 +245,22 @@ class MainWindow(QMainWindow):
         action_row.addWidget(self.test_en_btn, stretch=1)
         ctrl_layout.addLayout(action_row)
 
-        # Row 3: Live Microphone VU Level & VAD Status Bar
+        # Row 3: Live Microphone Reactive Soundwave Visualizer & VAD Status Bar
         meter_row = QHBoxLayout()
-        meter_row.setSpacing(10)
+        meter_row.setSpacing(12)
 
-        mic_icon = QLabel("MIC INPUT:")
-        mic_icon.setStyleSheet("font-size: 11px; font-weight: bold; color: #94a3b8;")
+        mic_icon = QLabel("AUDIO SPECTRUM:")
+        mic_icon.setStyleSheet("font-size: 11px; font-weight: 800; color: #94a3b8; letter-spacing: 0.5px;")
         
-        self.vu_bar = QProgressBar()
-        self.vu_bar.setObjectName("vuBar")
-        self.vu_bar.setRange(0, 100)
-        self.vu_bar.setValue(0)
-        self.vu_bar.setTextVisible(False)
-        self.vu_bar.setFixedHeight(12)
+        self.visualizer = SoundwaveVisualizer(num_bars=36)
 
         self.vad_badge = QLabel("MIC IDLE")
         self.vad_badge.setObjectName("vadBadge")
         self.vad_badge.setAlignment(Qt.AlignCenter)
-        self.vad_badge.setFixedSize(130, 24)
+        self.vad_badge.setFixedSize(130, 28)
 
         meter_row.addWidget(mic_icon)
-        meter_row.addWidget(self.vu_bar, stretch=1)
+        meter_row.addWidget(self.visualizer, stretch=1)
         meter_row.addWidget(self.vad_badge)
         ctrl_layout.addLayout(meter_row)
 
@@ -314,11 +323,14 @@ class MainWindow(QMainWindow):
 
         live_layout.addWidget(orig_card, stretch=1)
         live_layout.addWidget(trans_card, stretch=1)
-        self.tabs.addTab(live_widget, "Live Translation")
 
-        # Tab 2: Conversation History View
+        # Tab 1: Modern Conversation Stream (Cards & Replay)
         self.conversation_view = ConversationView()
-        self.tabs.addTab(self.conversation_view, "Conversation History")
+        self.conversation_view.replay_requested.connect(self.on_conversation_replay)
+        self.tabs.addTab(self.conversation_view, "💬 Conversation Stream")
+
+        # Tab 2: Live Translation Side-by-Side
+        self.tabs.addTab(live_widget, "⚡ Real-Time Side-by-Side")
 
         main_layout.addWidget(self.tabs, stretch=1)
 
@@ -453,6 +465,20 @@ class MainWindow(QMainWindow):
                 background-color: #312e81;
                 color: #ffffff;
             }
+            QPushButton#headerActionBtn {
+                background-color: #1f2937;
+                color: #cbd5e1;
+                border: 1px solid #374151;
+                border-radius: 8px;
+                padding: 6px 14px;
+                font-size: 12px;
+                font-weight: 600;
+            }
+            QPushButton#headerActionBtn:hover {
+                color: #ffffff;
+                background-color: #374151;
+                border-color: #4b5563;
+            }
             QPushButton#settingsBtn {
                 background-color: #1f2937;
                 color: #94a3b8;
@@ -528,6 +554,7 @@ class MainWindow(QMainWindow):
         pipeline = self.manager.pipeline
         if not pipeline.capture.is_recording:
             pipeline.start_listening()
+            self.visualizer.set_active(True)
             self.mic_btn.setText("■  STOP LISTENING")
             self.mic_btn.setProperty("recording", True)
             self.mic_btn.style().unpolish(self.mic_btn)
@@ -537,6 +564,7 @@ class MainWindow(QMainWindow):
             self.vad_badge.setStyleSheet("background-color: #064e3b; color: #34d399; font-weight: bold; border-radius: 6px;")
         else:
             pipeline.stop_listening(flush=True)
+            self.visualizer.set_active(False)
             self.mic_btn.setText("▶  START LISTENING")
             self.mic_btn.setProperty("recording", False)
             self.mic_btn.style().unpolish(self.mic_btn)
@@ -544,12 +572,12 @@ class MainWindow(QMainWindow):
             self.status_label.setText("Microphone stopped. Processing any pending speech...")
             self.vad_badge.setText("MIC IDLE")
             self.vad_badge.setStyleSheet("background-color: #1f2937; color: #64748b; font-weight: bold; border-radius: 6px;")
-            self.vu_bar.setValue(0)
 
     def on_ptt_pressed(self):
         pipeline = self.manager.pipeline
         if not pipeline.capture.is_recording:
             pipeline.start_listening()
+            self.visualizer.set_active(True)
             self.status_label.setText("Push-to-Talk active: Speaking...")
             self.vad_badge.setText("HOLDING PTT")
             self.vad_badge.setStyleSheet("background-color: #075985; color: #38bdf8; font-weight: bold; border-radius: 6px;")
@@ -558,10 +586,10 @@ class MainWindow(QMainWindow):
         pipeline = self.manager.pipeline
         if pipeline.capture.is_recording:
             pipeline.stop_listening(flush=True)
+            self.visualizer.set_active(False)
             self.status_label.setText("Push-to-Talk released. Processing speech...")
             self.vad_badge.setText("PROCESSING")
             self.vad_badge.setStyleSheet("background-color: #78350f; color: #f59e0b; font-weight: bold; border-radius: 6px;")
-            self.vu_bar.setValue(0)
 
     def toggle_mute(self):
         playback = self.manager.pipeline.playback
@@ -634,6 +662,37 @@ class MainWindow(QMainWindow):
             )
             self.status_label.setText("Replaying translated speech aloud...")
 
+    def on_conversation_replay(self, text: str, target_lang: str):
+        """Synthesize and play audio for any past conversation card."""
+        try:
+            self.status_label.setText(f"Replaying voice ({target_lang.upper()}): {text[:30]}...")
+            pcm, sr, _ = self.manager.pipeline.tts.synthesize(text, target_lang)
+            self.manager.pipeline.playback.play_raw_bytes(pcm, sample_rate=sr)
+        except Exception as e:
+            logger.error(f"Error replaying conversation audio: {e}")
+            self.status_label.setText(f"Replay error: {e}")
+
+    def export_transcript(self):
+        """Save formatted conversation history to a text file."""
+        filepath, _ = QFileDialog.getSaveFileName(
+            self, "Export Conversation Transcript", "transcript.txt", "Text Files (*.txt);;All Files (*)"
+        )
+        if filepath:
+            try:
+                history = self.manager.get_history_as_dicts()
+                self.conversation_view.export_to_text(filepath, history)
+                self.status_label.setText(f"Transcript exported successfully to {os.path.basename(filepath)}")
+            except Exception as e:
+                QMessageBox.warning(self, "Export Failed", f"Could not export transcript: {e}")
+
+    def clear_conversation_history(self):
+        """Reset conversation manager and clear all cards from view."""
+        self.manager.clear_history()
+        self.conversation_view.clear()
+        self.orig_text.clear()
+        self.trans_text.clear()
+        self.status_label.setText("Conversation history cleared.")
+
     def run_quick_test(self):
         """Simulate an instant spoken utterance to verify audio, STT, MT, and TTS."""
         self.status_label.setText("Generating test spoken utterance...")
@@ -662,9 +721,8 @@ class MainWindow(QMainWindow):
     # --- Worker Signal Slots ---
     @Slot(float)
     def on_audio_level(self, level: float):
-        """Update live VU meter bar (0-100)."""
-        val = int(level * 100)
-        self.vu_bar.setValue(val)
+        """Update live reactive soundwave equalizer."""
+        self.visualizer.set_level(level)
 
     @Slot()
     def on_speech_detected(self):
@@ -711,6 +769,9 @@ class MainWindow(QMainWindow):
                 "target_lang": turn.target_lang,
                 "original_text": turn.original_text,
                 "translated_text": turn.translated_text,
+                "stt_latency_ms": turn.stt_latency_ms,
+                "mt_latency_ms": turn.mt_latency_ms,
+                "tts_latency_ms": turn.tts_latency_ms,
                 "total_latency_ms": turn.total_latency_ms,
                 "time_str": time.strftime("%H:%M:%S", time.localtime(turn.timestamp))
             })
