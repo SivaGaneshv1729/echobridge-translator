@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/conversation_turn.dart';
+import '../../services/speech_pipeline_service.dart';
 import '../widgets/soundwave_visualizer.dart';
 import '../widgets/chat_bubble.dart';
 
@@ -12,61 +13,33 @@ class ConversationScreen extends StatefulWidget {
 }
 
 class _ConversationScreenState extends State<ConversationScreen> {
+  final SpeechPipelineService _pipeline = SpeechPipelineService();
   bool _isListening = false;
   double _audioLevel = 0.0;
-  String _mode = "auto"; // "auto", "en", "ja"
+  String _statusText = "Ready. Tap START to translate.";
   final List<ConversationTurn> _history = [];
   final ScrollController _scrollController = ScrollController();
 
-  void _toggleListening() {
-    setState(() {
-      _isListening = !_isListening;
-      _audioLevel = _isListening ? 0.65 : 0.0;
-    });
-
-    // Simulate speech detection in demo mode if empty
-    if (_isListening && _history.isEmpty) {
-      Future.delayed(const Duration(milliseconds: 1600), () {
-        if (!mounted || !_isListening) return;
-        _addTurn(
-          speakerLang: "en",
-          targetLang: "ja",
-          originalText: "Hello! Welcome to Japan. Where can I find the nearest subway station?",
-          translatedText: "こんにちは！日本へようこそ。最寄りの地下鉄の駅はどこですか？",
-          sttMs: 380,
-          mtMs: 110,
-          ttsMs: 190,
-        );
-      });
-    }
+  @override
+  void initState() {
+    super.initState();
+    _pipeline.onTurnCompleted = (turn) {
+      if (!mounted) return;
+      setState(() => _history.add(turn));
+      _scrollToBottom();
+    };
+    _pipeline.onStatusChanged = (status) {
+      if (!mounted) return;
+      setState(() => _statusText = status);
+    };
+    _pipeline.onAudioLevelChanged = (level) {
+      if (!mounted) return;
+      setState(() => _audioLevel = level);
+    };
+    _pipeline.initialize();
   }
 
-  void _addTurn({
-    required String speakerLang,
-    required String targetLang,
-    required String originalText,
-    required String translatedText,
-    required double sttMs,
-    required double mtMs,
-    required double ttsMs,
-  }) {
-    final turn = ConversationTurn(
-      id: _history.length + 1,
-      timestamp: DateTime.now(),
-      speakerLang: speakerLang,
-      targetLang: targetLang,
-      originalText: originalText,
-      translatedText: translatedText,
-      sttLatencyMs: sttMs,
-      mtLatencyMs: mtMs,
-      ttsLatencyMs: ttsMs,
-      totalLatencyMs: sttMs + mtMs + ttsMs,
-    );
-
-    setState(() {
-      _history.add(turn);
-    });
-
+  void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -78,16 +51,16 @@ class _ConversationScreenState extends State<ConversationScreen> {
     });
   }
 
+  void _toggleListening() async {
+    await _pipeline.toggleListening();
+    if (!mounted) return;
+    setState(() {
+      _isListening = _pipeline.isListening;
+    });
+  }
+
   void _simulateViceVersa() {
-    _addTurn(
-      speakerLang: "ja",
-      targetLang: "en",
-      originalText: "この通りをまっすぐ行って、右に曲がると駅がありますよ。",
-      translatedText: "Go straight down this street and turn right, and you will find the station.",
-      sttMs: 410,
-      mtMs: 125,
-      ttsMs: 200,
-    );
+    _pipeline.toggleListening();
   }
 
   @override
@@ -154,7 +127,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      _mode == "auto" ? "✨ AUTO VICE-VERSA (EN ⇄ JA)" : (_mode == "en" ? "EN ➔ JA" : "JA ➔ EN"),
+                      _pipeline.mode == "auto" ? "✨ AUTO VICE-VERSA (EN ⇄ JA)" : (_pipeline.mode == "en" ? "EN ➔ JA" : "JA ➔ EN"),
                       style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w700),
                     ),
                     Container(
@@ -178,6 +151,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 SoundwaveVisualizerWidget(
                   currentAudioLevel: _audioLevel,
                   isActive: _isListening,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _statusText,
+                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 11, fontStyle: FontStyle.italic),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -229,11 +210,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       return ChatBubbleWidget(
                         turn: _history[index],
                         onReplay: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text("Replaying offline audio: ${_history[index].translatedText}"),
-                              duration: const Duration(milliseconds: 1000),
-                            ),
+                          _pipeline.replayVoice(
+                            _history[index].translatedText,
+                            _history[index].targetLang,
                           );
                         },
                       );
@@ -271,12 +250,12 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   IconButton(
                     onPressed: () {
                       setState(() {
-                        if (_mode == "auto") {
-                          _mode = "en";
-                        } else if (_mode == "en") {
-                          _mode = "ja";
+                        if (_pipeline.mode == "auto") {
+                          _pipeline.mode = "en";
+                        } else if (_pipeline.mode == "en") {
+                          _pipeline.mode = "ja";
                         } else {
-                          _mode = "auto";
+                          _pipeline.mode = "auto";
                         }
                       });
                     },
