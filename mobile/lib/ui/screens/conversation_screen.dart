@@ -3,6 +3,7 @@ import '../../models/conversation_turn.dart';
 import '../../services/speech_pipeline_service.dart';
 import '../widgets/soundwave_visualizer.dart';
 import '../widgets/chat_bubble.dart';
+import '../widgets/export_dialog.dart';
 import 'settings_screen.dart';
 
 /// Main conversational screen for EchoBridge Mobile.
@@ -97,8 +98,15 @@ class _ConversationScreenState extends State<ConversationScreen> {
             icon: const Icon(Icons.download_rounded, color: Color(0xFF94A3B8)),
             tooltip: "Export Transcript",
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Transcript exported to Downloads folder.")),
+              if (_history.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("No conversation turns to export yet.")),
+                );
+                return;
+              }
+              showDialog(
+                context: context,
+                builder: (_) => ExportTranscriptDialog(history: _history),
               );
             },
           ),
