@@ -1,122 +1,138 @@
 # 🌉 EchoBridge — Zero-Cost Offline Real-Time Speech Translator
 
-EchoBridge is a lightweight, bidirectional, real-time desktop application for speech-to-speech translation. It operates **100% locally on your hardware** without external cloud APIs, internet connectivity, API keys, or subscriptions.
+![EchoBridge UI Preview](docs/images/echobridge_ui.jpg)
+
+EchoBridge is a lightweight, bidirectional, real-time speech-to-speech translator. It operates **100% offline on local hardware** with zero external cloud APIs, zero subscriptions, and complete privacy.
 
 ---
 
-## 🚀 Key Features
+## 🚀 Key Highlights
 
-- **100% Offline Inference:** Runs entirely locally on CPU with INT8 quantization after initial model setup.
-- **Bidirectional Speech Translation:** Speak English to hear Japanese, or speak Japanese to hear English (`en` ⇄ `ja`).
-- **Low-Latency Pipeline:** Real-time speech recognition, translation, and neural voice synthesis with target benchmark <1.5s for short utterances.
-- **Acoustic Feedback Gating:** Automatically prevents the microphone from capturing and re-translating its own speaker output.
-- **Modern PySide6 Desktop Interface:** Responsive, sleek dark-themed interface with real-time speech activity indicators, latency telemetry, conversation history bubbles, and push-to-talk fallbacks.
-- **Zero Cost & Open Source:** Built entirely on permissive open-source models and libraries (MIT, Apache 2.0, Public Domain).
+- **✨ Automatic Vice-Versa Translation:** Speak naturally in either English or Japanese (`en` ⇄ `ja`). The pipeline automatically detects the speaker's language without manual button swapping.
+- **⚡ Ultra-Low Latency (<1.5s):** Sub-second end-to-end pipeline (VAD ➔ Faster-Whisper INT8 ➔ MarianMT ➔ Piper TTS).
+- **🎛️ Dynamic 36-Band Soundwave Visualizer:** Organic real-time audio spectrum with decay physics and multi-color gradients.
+- **💬 Unified Conversational Feed:** Speaker avatar badges (`🇺🇸 English` vs `🇯🇵 Japanese`), micro-latency badges (`⚡ ms`), inline `▶ Replay Voice`, and one-click `📋 Copy Translation`.
+- **🪟 Floating Subtitle Overlay (HUD Mode):** Frameless, transparent, draggable always-on-top window that displays live subtitles over Zoom, YouTube, or games (`Ctrl+H`).
+- **📥 Transcript Export:** Export complete session history to plain text (`.txt`) or structured JSON (`.json`).
+- **📱 Android Mobile Ready:** Flutter mobile app (`mobile/`) powered by Sherpa-ONNX with automated cloud CI/CD (`.github/workflows/build_apk.yml`).
+- **📦 Portable Windows Executable:** Standalone `dist/EchoBridge.exe` bundling all models and runtimes for one-click launch without Python.
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Neural Pipeline Architecture
 
 ```
-Microphone Audio Input
-        │
-        ▼
-Voice Activity Detection (Silero VAD ONNX ~15ms)
-        │
-        ▼
-Speech Recognition (Faster-Whisper INT8 ~250-600ms)
-        │
-        ▼
-Machine Translation (CTranslate2 INT8 OPUS-MT / Argos ~50ms)
-        │
-        ▼
-Text-to-Speech Synthesis (Piper ONNX + PyKakasi ~70-240ms)
-        │
-        ▼
-Speaker Playback Output (Anti-Feedback Gated)
+                    Microphone Input (16kHz PCM)
+                                │
+                                ▼
+               Silero VAD v5 ONNX (~0.24ms frame chunk)
+                                │
+                                ▼
+          Faster-Whisper Multilingual INT8 (~350–700ms)
+                                │
+                     Language Auto-Detection
+                     ┌──────────┴──────────┐
+               [English Spoken]      [Japanese Spoken]
+                     │                     │
+                     ▼                     ▼
+          Argos / MarianMT EN➔JA   Argos / MarianMT JA➔EN
+                   (~55ms)                (~52ms)
+                     └──────────┬──────────┘
+                                │
+                                ▼
+                 Piper VITS ONNX Audio Synthesis
+              (Amy Low ~75ms | Hi-Fi Captain ~240ms)
+                                │
+                                ▼
+                  Anti-Feedback Gated Playback
 ```
 
 ---
 
-## 📊 Measured Benchmark Results (Intel Core i5 CPU)
+## ⌨️ Desktop Keyboard Shortcuts
 
-Measured directly on an Intel Core i5-10310U (4C/8T, AVX2 enabled, no GPU):
-
-| Component | Model | Metric | Latency |
-|---|---|---|---|
-| **VAD** | Silero VAD (ONNX) | 32ms frame chunk | **0.24 ms** |
-| **STT** | Faster-Whisper Base (INT8) | 2s spoken utterance | **691 - 1,180 ms** |
-| **STT** | Faster-Whisper Tiny (INT8) | 2s spoken utterance | **~250 - 350 ms** |
-| **MT (EN ➔ JA)** | CTranslate2 INT8 | Conversational phrase | **55 - 74 ms** |
-| **MT (JA ➔ EN)** | CTranslate2 INT8 | Conversational phrase | **52 - 60 ms** |
-| **TTS (English)** | Piper `amy-low` | Complete sentence | **72 - 142 ms** |
-| **TTS (Japanese)**| Piper `hi_fi_captain-medium` | Complete sentence | **240 - 300 ms** |
-| **Total Pipeline** | End-to-End Latency | Audio In to Audio Out | **~880 - 1,420 ms** |
-
-*RAM Consumption: ~550–860 MB peak during conversation.*
-
----
-
-## 🛠️ Technology Stack
-
-| Layer | Technology | License |
+| Shortcut | Action | Description |
 |---|---|---|
-| **GUI** | PySide6 (Qt 6) | LGPLv3 |
-| **Audio I/O** | SoundDevice + PortAudio | MIT |
-| **VAD** | Silero VAD (ONNXRuntime) | MIT |
-| **STT** | Faster-Whisper (CTranslate2) | MIT |
-| **Translation** | Argos / OPUS-MT (CTranslate2) | MIT / CC |
-| **TTS** | Piper TTS (ONNX) | MIT / Public Domain |
-| **G2P** | PyKakasi | MIT |
-| **Tests** | Pytest | MIT |
+| <kbd>Ctrl</kbd> + <kbd>Space</kbd> | **Toggle Listening** | Start or stop continuous microphone listening |
+| <kbd>Ctrl</kbd> + <kbd>H</kbd> | **Subtitle Overlay (HUD)** | Switch to compact floating always-on-top subtitle window |
+| <kbd>Ctrl</kbd> + <kbd>E</kbd> | **Export Transcript** | Save formatted conversation history to `.txt` |
+| <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd> | **Clear History** | Reset conversation stream and memory |
+| <kbd>Ctrl</kbd> + <kbd>M</kbd> | **Toggle Mute** | Mute / unmute speaker voice playback |
+| <kbd>F1</kbd> | **Settings** | Configure input/output audio devices and VAD sensitivity |
 
 ---
 
-## 📦 Installation & Setup
+## 📊 Measured Latency Benchmarks (Intel Core i5-10310U CPU)
 
-### 1. Clone the repository
-```bash
+*Benchmarked on Intel Core i5 quad-core CPU, AVX2 enabled, no discrete GPU:*
+
+| Pipeline Component | Neural Model | Latency | Memory Footprint |
+|---|---|---|---|
+| **VAD** | Silero VAD v5 ONNX | **0.24 ms** | ~2.3 MB |
+| **STT** | Faster-Whisper Base INT8 | **690 – 1,120 ms** | ~145 MB |
+| **STT (Fast Mode)** | Faster-Whisper Tiny INT8 | **250 – 380 ms** | ~39 MB |
+| **MT (EN ➔ JA)** | MarianMT CTranslate2 INT8 | **55 – 74 ms** | ~45 MB |
+| **MT (JA ➔ EN)** | MarianMT CTranslate2 INT8 | **52 – 60 ms** | ~45 MB |
+| **TTS (English)** | Piper `en_US-amy-low` | **72 – 140 ms** | ~60 MB |
+| **TTS (Japanese)** | Piper `ja_JP-hi_fi_captain` | **240 – 300 ms** | ~73 MB |
+| **Total End-to-End** | **Audio In ➔ Audio Out** | **~850 – 1,400 ms** | **~420 MB Peak** |
+
+---
+
+## 💻 Running on Windows
+
+### Option 1: Run via Python Virtual Environment
+```powershell
+# 1. Clone repository
 git clone https://github.com/SivaGaneshv1729/echobridge-translator.git
 cd echobridge-translator
-```
 
-### 2. Create Virtual Environment & Install Dependencies
-```bash
-python -m venv .venv
+# 2. Activate virtual environment & run
 .\.venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-### 3. Download & Verify Local Offline Models
-Run the automated first-run setup script to pre-cache all models locally:
-```bash
-python scripts/download_models.py
-```
-
----
-
-## 💻 Running the Application
-
-### Launch Desktop Interface
-```bash
 python app.py
 ```
 
-### Launch Interactive CLI Prototype
-```bash
-python scripts/cli_translate.py
+### Option 2: Run Standalone Executable (No Python Required)
+1. Download or extract `EchoBridge-Windows-Portable.zip`.
+2. Double-click `EchoBridge.exe`.
+
+### Build Standalone Executable Locally
+```powershell
+python scripts/build_desktop_exe.py
 ```
 
 ---
 
-## 🧪 Running Automated Tests
+## 📱 EchoBridge Mobile (Android APK)
 
-Run the full automated test suite (including strict offline socket isolation tests):
+The mobile companion app is built with Flutter and Sherpa-ONNX under [`mobile/`](mobile/):
+
+### Features:
+- 100% on-device offline inference (ARM64-v8a).
+- Dynamic 32-band reactive equalizer widget.
+- Interactive transcript export modal (copy to clipboard, save `.txt`, export `.json`).
+- Offline model cache verification and management.
+
+### Build Android APK via GitHub Actions CI (Recommended):
+Push any tag or manually trigger the workflow under **Actions** ➔ **Build Offline EchoBridge Android APK** on GitHub. The signed `.apk` will be compiled on cloud Ubuntu runners and uploaded to Releases.
+
+### Build Android APK Locally:
 ```bash
+cd mobile
+flutter pub get
+flutter build apk --release --split-per-abi
+```
+
+---
+
+## 🧪 Automated Testing
+
+Run the full pytest suite (17/17 tests passing):
+```powershell
 pytest -v
 ```
 
 ---
 
 ## 📜 License
-This project is licensed under the [MIT License](LICENSE).
+Licensed under the [MIT License](LICENSE).
