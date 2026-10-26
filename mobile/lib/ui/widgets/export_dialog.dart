@@ -14,17 +14,33 @@ class ExportTranscriptDialog extends StatelessWidget {
   String _formatTextTranscript() {
     final buffer = StringBuffer();
     buffer.writeln("=" * 60);
-    buffer.writeln("   EchoBridge Conversation Transcript");
+    buffer.writeln("   EchoBridge Conversation & Language Coaching Transcript");
     buffer.writeln("   Exported: ${DateTime.now().toLocal()}");
     buffer.writeln("=" * 60);
     buffer.writeln();
 
     for (final t in history) {
       final timeStr = "${t.timestamp.hour.toString().padLeft(2, '0')}:${t.timestamp.minute.toString().padLeft(2, '0')}:${t.timestamp.second.toString().padLeft(2, '0')}";
-      final dir = t.isEnglishSpeaker ? "EN ➔ JA" : "JA ➔ EN";
-      buffer.writeln("[$timeStr] [$dir] (Total Latency: ${t.totalLatencyMs.toStringAsFixed(0)}ms)");
-      buffer.writeln("  Spoken:     ${t.originalText}");
-      buffer.writeln("  Translated: ${t.translatedText}");
+      if (t.isCoachTurn) {
+        final tgt = t.targetLang.toUpperCase();
+        buffer.writeln("[$timeStr] [AI COACH - $tgt PRACTICE] (Total Latency: ${t.totalLatencyMs.toStringAsFixed(0)}ms)");
+        buffer.writeln("  Student Said:       ${t.originalText}");
+        if (!t.isNatural || t.suggestedCorrection.isNotEmpty) {
+          buffer.writeln("  Suggested Phrasing: ${t.suggestedCorrection}");
+        }
+        if (t.grammarNotes.isNotEmpty) {
+          buffer.writeln("  Grammar Coaching:   ${t.grammarNotes}");
+        }
+        if (t.politenessLevel.isNotEmpty) {
+          buffer.writeln("  Politeness Level:   ${t.politenessLevel}");
+        }
+        buffer.writeln("  Coach Spoken Reply: ${t.translatedText}");
+      } else {
+        final dir = t.isEnglishSpeaker ? "EN ➔ JA" : "JA ➔ EN";
+        buffer.writeln("[$timeStr] [$dir] (Total Latency: ${t.totalLatencyMs.toStringAsFixed(0)}ms)");
+        buffer.writeln("  Spoken:     ${t.originalText}");
+        buffer.writeln("  Translated: ${t.translatedText}");
+      }
       buffer.writeln();
     }
     return buffer.toString();
@@ -42,6 +58,12 @@ class ExportTranscriptDialog extends StatelessWidget {
       "mt_latency_ms": t.mtLatencyMs,
       "tts_latency_ms": t.ttsLatencyMs,
       "total_latency_ms": t.totalLatencyMs,
+      "is_coach_turn": t.isCoachTurn,
+      "suggested_correction": t.suggestedCorrection,
+      "is_natural": t.isNatural,
+      "politeness_level": t.politenessLevel,
+      "grammar_notes": t.grammarNotes,
+      "vocabulary_tips": t.vocabularyTips,
     }).toList();
     return const JsonEncoder.withIndent("  ").convert(list);
   }

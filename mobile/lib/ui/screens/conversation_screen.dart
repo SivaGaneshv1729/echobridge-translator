@@ -3,6 +3,7 @@ import '../../models/conversation_turn.dart';
 import '../../services/speech_pipeline_service.dart';
 import '../widgets/soundwave_visualizer.dart';
 import '../widgets/chat_bubble.dart';
+import '../widgets/coaching_bubble.dart';
 import '../widgets/export_dialog.dart';
 import 'settings_screen.dart';
 
@@ -226,12 +227,24 @@ class _ConversationScreenState extends State<ConversationScreen> {
                     controller: _scrollController,
                     itemCount: _history.length,
                     itemBuilder: (context, index) {
+                      final turn = _history[index];
+                      if (turn.isCoachTurn) {
+                        return CoachingBubbleWidget(
+                          turn: turn,
+                          onReplay: () {
+                            _pipeline.replayVoice(
+                              turn.translatedText,
+                              turn.targetLang,
+                            );
+                          },
+                        );
+                      }
                       return ChatBubbleWidget(
-                        turn: _history[index],
+                        turn: turn,
                         onReplay: () {
                           _pipeline.replayVoice(
-                            _history[index].translatedText,
-                            _history[index].targetLang,
+                            turn.translatedText,
+                            turn.targetLang,
                           );
                         },
                       );

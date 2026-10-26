@@ -10,6 +10,12 @@ class ConversationTurn {
   final double mtLatencyMs;
   final double ttsLatencyMs;
   final double totalLatencyMs;
+  final bool isCoachTurn;
+  final String suggestedCorrection;
+  final bool isNatural;
+  final String politenessLevel;
+  final String grammarNotes;
+  final List<String> vocabularyTips;
 
   ConversationTurn({
     required this.id,
@@ -22,6 +28,12 @@ class ConversationTurn {
     required this.mtLatencyMs,
     required this.ttsLatencyMs,
     required this.totalLatencyMs,
+    this.isCoachTurn = false,
+    this.suggestedCorrection = '',
+    this.isNatural = true,
+    this.politenessLevel = '',
+    this.grammarNotes = '',
+    this.vocabularyTips = const [],
   });
 
   bool get isEnglishSpeaker => speakerLang == 'en';
