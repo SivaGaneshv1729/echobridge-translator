@@ -3,6 +3,7 @@ import '../../models/conversation_turn.dart';
 import '../../services/speech_pipeline_service.dart';
 import '../widgets/soundwave_visualizer.dart';
 import '../widgets/chat_bubble.dart';
+import 'settings_screen.dart';
 
 /// Main conversational screen for EchoBridge Mobile.
 class ConversationScreen extends StatefulWidget {
@@ -98,6 +99,16 @@ class _ConversationScreenState extends State<ConversationScreen> {
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text("Transcript exported to Downloads folder.")),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined, color: Color(0xFF94A3B8)),
+            tooltip: "Settings",
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
               );
             },
           ),
