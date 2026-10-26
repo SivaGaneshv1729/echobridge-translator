@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QFileDialog
 )
 from PySide6.QtCore import Qt, QThread, Signal, Slot, QTimer
-from PySide6.QtGui import QFont, QColor, QPalette
+from PySide6.QtGui import QFont, QColor, QPalette, QKeySequence, QShortcut
 
 from pipeline.translator import TranslationPipeline
 from pipeline.conversation import ConversationManager, ConversationTurn
@@ -142,21 +142,25 @@ class MainWindow(QMainWindow):
         self.hud_btn = QPushButton("🪟 Subtitle Overlay")
         self.hud_btn.setObjectName("headerActionBtn")
         self.hud_btn.setFixedHeight(36)
+        self.hud_btn.setToolTip("Switch to compact floating subtitle overlay HUD mode (Ctrl+H)")
         self.hud_btn.clicked.connect(self.toggle_overlay_hud)
 
         self.export_btn = QPushButton("📥 Export Transcript")
         self.export_btn.setObjectName("headerActionBtn")
         self.export_btn.setFixedHeight(36)
+        self.export_btn.setToolTip("Save formatted conversation transcript to a text file (Ctrl+E)")
         self.export_btn.clicked.connect(self.export_transcript)
 
         self.clear_btn = QPushButton("🗑 Clear")
         self.clear_btn.setObjectName("headerActionBtn")
         self.clear_btn.setFixedHeight(36)
+        self.clear_btn.setToolTip("Reset active conversation feed (Ctrl+Shift+C)")
         self.clear_btn.clicked.connect(self.clear_conversation_history)
 
         self.settings_btn = QPushButton("⚙ Settings")
         self.settings_btn.setObjectName("settingsBtn")
         self.settings_btn.setFixedHeight(36)
+        self.settings_btn.setToolTip("Configure audio devices, models, and latency (F1)")
         self.settings_btn.clicked.connect(self.open_settings)
 
         header.addLayout(title_box)
@@ -225,6 +229,7 @@ class MainWindow(QMainWindow):
         self.mic_btn.setObjectName("micBtn")
         self.mic_btn.setFixedHeight(44)
         self.mic_btn.setMinimumWidth(200)
+        self.mic_btn.setToolTip("Toggle microphone listening (Ctrl+Space)")
         self.mic_btn.clicked.connect(self.toggle_microphone)
 
         # Push-to-Talk Button
@@ -239,6 +244,7 @@ class MainWindow(QMainWindow):
         self.mute_btn = QPushButton("AUDIO OUTPUT: ON")
         self.mute_btn.setObjectName("muteBtn")
         self.mute_btn.setFixedHeight(44)
+        self.mute_btn.setToolTip("Mute/unmute speaker playback (Ctrl+M)")
         self.mute_btn.clicked.connect(self.toggle_mute)
 
         # Quick Test Button
@@ -367,6 +373,18 @@ class MainWindow(QMainWindow):
         footer_layout.addSpacing(16)
         footer_layout.addWidget(self.total_lat_label)
         main_layout.addWidget(footer_card)
+
+        # Initialize global keyboard shortcuts
+        self._setup_shortcuts()
+
+    def _setup_shortcuts(self):
+        """Configure convenient global keyboard shortcuts."""
+        QShortcut(QKeySequence("Ctrl+Space"), self, activated=self.toggle_microphone)
+        QShortcut(QKeySequence("Ctrl+H"), self, activated=self.toggle_overlay_hud)
+        QShortcut(QKeySequence("Ctrl+E"), self, activated=self.export_transcript)
+        QShortcut(QKeySequence("Ctrl+Shift+C"), self, activated=self.clear_conversation_history)
+        QShortcut(QKeySequence("Ctrl+M"), self, activated=self.toggle_mute)
+        QShortcut(QKeySequence("F1"), self, activated=self.open_settings)
 
     def apply_dark_theme(self):
         self.setStyleSheet("""
