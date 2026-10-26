@@ -21,6 +21,12 @@ class ConversationTurn:
     mt_latency_ms: float
     tts_latency_ms: float
     total_latency_ms: float
+    is_coach_turn: bool = False
+    suggested_correction: str = ""
+    is_natural: bool = True
+    politeness_level: str = ""
+    grammar_notes: str = ""
+    vocabulary_tips: List[str] = field(default_factory=list)
 
 class ConversationManager:
     """Manages two-way conversational flow, history, and direction switching."""
@@ -64,7 +70,13 @@ class ConversationManager:
             stt_latency_ms=metrics["stt_latency_ms"],
             mt_latency_ms=metrics["mt_latency_ms"],
             tts_latency_ms=metrics["tts_latency_ms"],
-            total_latency_ms=metrics["total_e2e_latency_ms"]
+            total_latency_ms=metrics["total_e2e_latency_ms"],
+            is_coach_turn=metrics.get("is_coach_turn", False),
+            suggested_correction=metrics.get("suggested_correction", ""),
+            is_natural=metrics.get("is_natural", True),
+            politeness_level=metrics.get("politeness_level", ""),
+            grammar_notes=metrics.get("grammar_notes", ""),
+            vocabulary_tips=metrics.get("vocabulary_tips", [])
         )
         self.history.append(turn)
         logger.info(f"Recorded Conversation Turn #{turn.id}: [{turn.speaker_lang} -> {turn.target_lang}] '{turn.original_text}'")
@@ -115,7 +127,13 @@ class ConversationManager:
                 "stt_latency_ms": t.stt_latency_ms,
                 "mt_latency_ms": t.mt_latency_ms,
                 "tts_latency_ms": t.tts_latency_ms,
-                "total_latency_ms": t.total_latency_ms
+                "total_latency_ms": t.total_latency_ms,
+                "is_coach_turn": t.is_coach_turn,
+                "suggested_correction": t.suggested_correction,
+                "is_natural": t.is_natural,
+                "politeness_level": t.politeness_level,
+                "grammar_notes": t.grammar_notes,
+                "vocabulary_tips": t.vocabulary_tips
             }
             for t in self.history
         ]

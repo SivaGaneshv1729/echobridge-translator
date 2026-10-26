@@ -12,6 +12,7 @@ from audio.playback import AudioPlayback
 from engines.speech_recognition import SpeechRecognizer
 from engines.translation import TranslatorEngine
 from engines.text_to_speech import TTSEngine
+from engines.language_coach import LanguageCoachEngine
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,9 @@ class TranslationPipeline:
         self.target_lang = target_lang
         self.models_dir = models_dir
         self.auto_playback = auto_playback
+        self.app_mode: str = "translate"     # "translate" or "coach"
+        self.practice_lang: str = "ja"       # Target language user is practicing
+        self.coach = LanguageCoachEngine()
 
         # Event callbacks
         self.on_audio_level: Optional[Callable[[float], None]] = None
@@ -187,7 +191,52 @@ class TranslationPipeline:
             if self.on_transcription:
                 self.on_transcription(orig_text, act_source, stt_ms)
 
-            # 2. Machine Translation
+            # Special Path: AI Language Coach & Conversational Partner Mode
+            if self.app_mode == "coach":
+                coach_lang = self.practice_lang if self.practice_lang in ("ja", "en") else act_source
+                logger.info(f"Evaluating utterance with AI Language Coach ({coach_lang}): '{orig_text}'")
+                coach_res = self.coach.evaluate_and_reply(orig_text, practice_lang=coach_lang)
+
+                if self.on_translation:
+                    self.on_translation(coach_res.reply_text, 0.0)
+
+                # Synthesize coach's conversational reply aloud in the practice language
+                audio_bytes, sample_rate, tts_ms = self.tts.synthesize(
+                    coach_res.reply_text,
+                    lang=coach_lang
+                )
+                if self.on_synthesis:
+                    self.on_synthesis(audio_bytes, sample_rate, tts_ms)
+
+                total_ms = (time.perf_counter() - t_start) * 1000
+
+                if self.auto_playback and len(audio_bytes) > 0:
+                    self.playback.play_raw_bytes(audio_bytes, sample_rate=sample_rate, blocking=False)
+
+                metrics = {
+                    "original_text": orig_text,
+                    "detected_language": detected_lang,
+                    "translated_text": coach_res.reply_text,
+                    "source_language": coach_lang,
+                    "target_language": coach_lang,
+                    "is_coach_turn": True,
+                    "coach_reply": coach_res.reply_text,
+                    "suggested_correction": coach_res.suggested_correction,
+                    "is_natural": coach_res.is_natural,
+                    "politeness_level": coach_res.politeness_level,
+                    "grammar_notes": coach_res.grammar_notes,
+                    "vocabulary_tips": coach_res.vocabulary_tips,
+                    "audio_duration_s": round(len(audio_data) / 16000, 2),
+                    "stt_latency_ms": round(stt_ms, 2),
+                    "mt_latency_ms": 0.0,
+                    "tts_latency_ms": round(tts_ms, 2),
+                    "total_e2e_latency_ms": round(total_ms, 2)
+                }
+                if self.on_pipeline_done:
+                    self.on_pipeline_done(metrics)
+                return metrics
+
+            # 2. Machine Translation (Standard Bilingual Mode)
             translated_text, mt_ms = self.translation.translate(
                 orig_text,
                 from_code=act_source,
