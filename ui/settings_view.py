@@ -5,7 +5,7 @@ from typing import Dict, Any, Callable, Optional
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
     QComboBox, QSlider, QCheckBox, QPushButton, 
-    QGroupBox, QFormLayout, QMessageBox
+    QGroupBox, QFormLayout, QMessageBox, QLineEdit
 )
 from PySide6.QtCore import Qt, Signal
 
@@ -82,7 +82,14 @@ class SettingsDialog(QDialog):
         default = {
             "stt": {"model_size": "base"},
             "audio": {"input_device_index": None, "output_device_index": None, "auto_playback": True, "playback_volume": 1.0},
-            "vad": {"threshold": 0.5}
+            "vad": {"threshold": 0.5},
+            "coach": {
+                "provider": "builtin",
+                "ollama_model": "qwen2.5:0.5b",
+                "ollama_url": "http://localhost:11434",
+                "api_url": "",
+                "api_key": ""
+            }
         }
         if os.path.exists(self.config_path):
             try:
@@ -140,7 +147,34 @@ class SettingsDialog(QDialog):
         model_layout.addRow("STT Model:", self.model_combo)
         layout.addWidget(model_group)
 
-        # 3. Voice Activity & Playback Controls
+        # 3. AI Language Coach & Conversational Tutor
+        coach_group = QGroupBox("🎓 AI Language Coach & Tutor Engine")
+        coach_layout = QFormLayout(coach_group)
+
+        self.coach_provider_combo = QComboBox()
+        self.coach_provider_combo.addItem("100% Offline Rule & Linguistic Heuristics (<1ms, 0MB RAM)", "builtin")
+        self.coach_provider_combo.addItem("Local Ollama SLM/LLM (e.g. Qwen2.5 / Llama3)", "ollama")
+        self.coach_provider_combo.addItem("Custom Cloud / OpenAI-Compatible Endpoint", "api")
+        
+        cur_prov = self.config.get("coach", {}).get("provider", "builtin")
+        idx = self.coach_provider_combo.findData(cur_prov)
+        if idx >= 0:
+            self.coach_provider_combo.setCurrentIndex(idx)
+
+        self.ollama_model_edit = QLineEdit()
+        self.ollama_model_edit.setPlaceholderText("e.g. qwen2.5:0.5b or llama3.2")
+        self.ollama_model_edit.setText(self.config.get("coach", {}).get("ollama_model", "qwen2.5:0.5b"))
+
+        self.ollama_url_edit = QLineEdit()
+        self.ollama_url_edit.setPlaceholderText("http://localhost:11434")
+        self.ollama_url_edit.setText(self.config.get("coach", {}).get("ollama_url", "http://localhost:11434"))
+
+        coach_layout.addRow("Coach Provider:", self.coach_provider_combo)
+        coach_layout.addRow("Ollama / API Model:", self.ollama_model_edit)
+        coach_layout.addRow("Endpoint URL:", self.ollama_url_edit)
+        layout.addWidget(coach_group)
+
+        # 4. Voice Activity & Playback Controls
         ctrl_group = QGroupBox("Voice Activity & Playback")
         ctrl_layout = QFormLayout(ctrl_group)
 
@@ -198,6 +232,9 @@ class SettingsDialog(QDialog):
         vad_thresh = self.vad_slider.value() / 100.0
         vol = self.vol_slider.value() / 100.0
         autoplay = self.autoplay_cb.isChecked()
+        coach_prov = self.coach_provider_combo.currentData()
+        ollama_model = self.ollama_model_edit.text().strip()
+        ollama_url = self.ollama_url_edit.text().strip()
 
         if "audio" not in self.config:
             self.config["audio"] = {}
@@ -205,6 +242,8 @@ class SettingsDialog(QDialog):
             self.config["stt"] = {}
         if "vad" not in self.config:
             self.config["vad"] = {}
+        if "coach" not in self.config:
+            self.config["coach"] = {}
 
         self.config["audio"]["input_device_index"] = in_idx
         self.config["audio"]["output_device_index"] = out_idx
@@ -212,6 +251,9 @@ class SettingsDialog(QDialog):
         self.config["audio"]["auto_playback"] = autoplay
         self.config["stt"]["model_size"] = model_size
         self.config["vad"]["threshold"] = vad_thresh
+        self.config["coach"]["provider"] = coach_prov
+        self.config["coach"]["ollama_model"] = ollama_model
+        self.config["coach"]["ollama_url"] = ollama_url
 
         os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
         with open(self.config_path, "w", encoding="utf-8") as f:

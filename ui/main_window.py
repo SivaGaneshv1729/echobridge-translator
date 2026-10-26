@@ -180,20 +180,40 @@ class MainWindow(QMainWindow):
         ctrl_layout.setContentsMargins(18, 16, 18, 16)
         ctrl_layout.setSpacing(14)
 
+        # Row 0: Mode Selector (Translation Mode vs AI Language Coach & Tutor)
+        mode_row = QHBoxLayout()
+        mode_row.setSpacing(10)
+
+        self.btn_mode_translate = QPushButton("✨ Live Translation Mode (Bilingual)")
+        self.btn_mode_translate.setFixedHeight(34)
+        self.btn_mode_translate.setCursor(Qt.PointingHandCursor)
+        self.btn_mode_translate.setToolTip("Bidirectional real-time speech-to-speech translation between English & Japanese")
+        self.btn_mode_translate.clicked.connect(lambda: self.switch_app_mode("translate"))
+
+        self.btn_mode_coach = QPushButton("🎓 AI Language Coach & Conversational Tutor")
+        self.btn_mode_coach.setFixedHeight(34)
+        self.btn_mode_coach.setCursor(Qt.PointingHandCursor)
+        self.btn_mode_coach.setToolTip("Interactive live conversational practice partner with instant grammar, fluency & politeness coaching")
+        self.btn_mode_coach.clicked.connect(lambda: self.switch_app_mode("coach"))
+
+        mode_row.addWidget(self.btn_mode_translate, stretch=1)
+        mode_row.addWidget(self.btn_mode_coach, stretch=1)
+        ctrl_layout.addLayout(mode_row)
+
         # Row 1: Languages + Direction Swap
         lang_row = QHBoxLayout()
         lang_row.setSpacing(12)
 
         src_box = QVBoxLayout()
-        src_label = QLabel("TRANSLATION MODE")
-        src_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #94a3b8;")
+        self.src_label = QLabel("TRANSLATION MODE")
+        self.src_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #94a3b8;")
         self.src_combo = QComboBox()
         self.src_combo.setFixedHeight(38)
         self.src_combo.addItem("✨ AUTO-DETECT (EN ⇄ JA VICE VERSA)", "auto")
         self.src_combo.addItem("English (United States) ➔ Japanese", "en")
         self.src_combo.addItem("Japanese (Japan) ➔ English", "ja")
         self.src_combo.currentIndexChanged.connect(self.on_lang_combo_changed)
-        src_box.addWidget(src_label)
+        src_box.addWidget(self.src_label)
         src_box.addWidget(self.src_combo)
 
         self.swap_btn = QPushButton("✨ AUTO ACTIVE")
@@ -203,8 +223,8 @@ class MainWindow(QMainWindow):
         self.swap_btn.clicked.connect(self.on_swap_clicked)
 
         tgt_box = QVBoxLayout()
-        tgt_label = QLabel("OUTPUT SPOKEN LANGUAGE")
-        tgt_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #38bdf8;")
+        self.tgt_label = QLabel("OUTPUT SPOKEN LANGUAGE")
+        self.tgt_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #38bdf8;")
         self.tgt_combo = QComboBox()
         self.tgt_combo.setFixedHeight(38)
         self.tgt_combo.addItem("Automatic (Vice Versa)", "auto")
@@ -212,13 +232,15 @@ class MainWindow(QMainWindow):
         self.tgt_combo.addItem("English (United States)", "en")
         self.tgt_combo.setEnabled(False)
         self.tgt_combo.currentIndexChanged.connect(self.on_lang_combo_changed)
-        tgt_box.addWidget(tgt_label)
+        tgt_box.addWidget(self.tgt_label)
         tgt_box.addWidget(self.tgt_combo)
 
         lang_row.addLayout(src_box, stretch=1)
         lang_row.addWidget(self.swap_btn, alignment=Qt.AlignBottom)
         lang_row.addLayout(tgt_box, stretch=1)
         ctrl_layout.addLayout(lang_row)
+
+        self.update_mode_button_styles()
 
         # Row 2: Action Buttons (Large, high-contrast)
         action_row = QHBoxLayout()
@@ -657,7 +679,88 @@ class MainWindow(QMainWindow):
             self.mute_btn.setText("AUDIO OUTPUT: ON")
             self.mute_btn.setStyleSheet("")
 
+    def update_mode_button_styles(self):
+        is_coach = getattr(self.manager.pipeline, "app_mode", "translate") == "coach"
+        if not is_coach:
+            self.btn_mode_translate.setStyleSheet("""
+                background-color: #0c4a6e;
+                color: #38bdf8;
+                border: 2px solid #0284c7;
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: 800;
+            """)
+            self.btn_mode_coach.setStyleSheet("""
+                background-color: #1e293b;
+                color: #94a3b8;
+                border: 1px solid #334155;
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: 600;
+            """)
+        else:
+            self.btn_mode_translate.setStyleSheet("""
+                background-color: #1e293b;
+                color: #94a3b8;
+                border: 1px solid #334155;
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: 600;
+            """)
+            self.btn_mode_coach.setStyleSheet("""
+                background-color: #312e81;
+                color: #c7d2fe;
+                border: 2px solid #6366f1;
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: 800;
+            """)
+
+    def switch_app_mode(self, mode: str):
+        if mode == "translate":
+            self.manager.pipeline.app_mode = "translate"
+            self.src_combo.blockSignals(True)
+            self.src_combo.clear()
+            self.src_combo.addItem("✨ AUTO-DETECT (EN ⇄ JA VICE VERSA)", "auto")
+            self.src_combo.addItem("English (United States) ➔ Japanese", "en")
+            self.src_combo.addItem("Japanese (Japan) ➔ English", "ja")
+            self.src_combo.setCurrentIndex(0)
+            self.src_combo.blockSignals(False)
+            self.src_label.setText("TRANSLATION MODE")
+            self.swap_btn.setEnabled(True)
+            self.swap_btn.show()
+            self.tgt_combo.show()
+            self.tgt_label.show()
+            self.update_mode_button_styles()
+            self.on_lang_combo_changed()
+            self.status_label.setText("Live Translation Mode: Bidirectional speech translation between English & Japanese.")
+        else:
+            self.manager.pipeline.app_mode = "coach"
+            self.src_combo.blockSignals(True)
+            self.src_combo.clear()
+            self.src_combo.addItem("🇯🇵 Practice Japanese (AI Partner replies in Japanese & coaches grammar)", "ja")
+            self.src_combo.addItem("🇺🇸 Practice English (AI Partner replies in English & coaches grammar)", "en")
+            self.src_combo.setCurrentIndex(0)
+            self.src_combo.blockSignals(False)
+            self.src_label.setText("PRACTICE & COACHING TARGET LANGUAGE")
+            self.swap_btn.setText("🎓 COACH ACTIVE")
+            self.swap_btn.setEnabled(False)
+            self.tgt_combo.hide()
+            self.tgt_label.hide()
+            practice_lang = "ja"
+            self.manager.pipeline.practice_lang = practice_lang
+            self.manager.pipeline.set_languages(practice_lang, practice_lang)
+            self.update_mode_button_styles()
+            self.test_en_btn.setText("TEST COACH (JA)")
+            self.status_label.setText("AI Language Coach Mode: Speak Japanese naturally; the AI partner will reply aloud and provide instant grammar coaching.")
+
     def on_swap_clicked(self):
+        if getattr(self.manager.pipeline, "app_mode", "translate") == "coach":
+            cur_idx = self.src_combo.currentIndex()
+            new_idx = 1 if cur_idx == 0 else 0
+            self.src_combo.setCurrentIndex(new_idx)
+            return
+
         src = self.src_combo.currentData()
         if src == "auto":
             self.src_combo.setCurrentIndex(self.src_combo.findData("en"))
@@ -668,6 +771,15 @@ class MainWindow(QMainWindow):
 
     def on_lang_combo_changed(self):
         src = self.src_combo.currentData()
+        if getattr(self.manager.pipeline, "app_mode", "translate") == "coach":
+            practice_lang = src if src in ("ja", "en") else "ja"
+            self.manager.pipeline.practice_lang = practice_lang
+            self.manager.pipeline.set_languages(practice_lang, practice_lang)
+            self.test_en_btn.setText(f"TEST COACH ({practice_lang.upper()})")
+            lang_name = "Japanese" if practice_lang == "ja" else "English"
+            self.status_label.setText(f"AI Coach ({lang_name} Practice): Speak naturally to receive conversational replies and grammar tips.")
+            return
+
         if src == "auto":
             self.tgt_combo.blockSignals(True)
             self.tgt_combo.setCurrentIndex(self.tgt_combo.findData("auto"))
@@ -708,6 +820,13 @@ class MainWindow(QMainWindow):
         self.manager.pipeline.auto_playback = audio_cfg.get("auto_playback", True)
         self.manager.pipeline.playback.device_index = audio_cfg.get("output_device_index")
         self.manager.pipeline.capture.device_index = audio_cfg.get("input_device_index")
+
+        coach_cfg = new_config.get("coach", {})
+        if hasattr(self.manager.pipeline, "coach"):
+            self.manager.pipeline.coach.provider = coach_cfg.get("provider", "builtin")
+            self.manager.pipeline.coach.ollama_model = coach_cfg.get("ollama_model", "qwen2.5:0.5b")
+            self.manager.pipeline.coach.ollama_url = coach_cfg.get("ollama_url", "http://localhost:11434")
+
         self.status_label.setText("Settings applied.")
 
     def replay_audio(self):
@@ -750,18 +869,26 @@ class MainWindow(QMainWindow):
         self.status_label.setText("Conversation history cleared.")
 
     def run_quick_test(self):
-        """Simulate an instant spoken utterance to verify audio, STT, MT, and TTS."""
+        """Simulate an instant spoken utterance to verify audio, STT, MT, and TTS or AI Coach."""
         self.status_label.setText("Generating test spoken utterance...")
-        src = self.manager.pipeline.source_lang
-        if src in ("auto", None):
-            if not hasattr(self, "_test_counter"):
-                self._test_counter = 0
-            self._test_counter += 1
-            test_lang = "ja" if self._test_counter % 2 == 0 else "en"
+        if getattr(self.manager.pipeline, "app_mode", "translate") == "coach":
+            practice_lang = getattr(self.manager.pipeline, "practice_lang", "ja")
+            if practice_lang == "ja":
+                test_phrase = "どこ行きますか？"
+            else:
+                test_phrase = "where is station?"
+            test_lang = practice_lang
         else:
-            test_lang = src
+            src = self.manager.pipeline.source_lang
+            if src in ("auto", None):
+                if not hasattr(self, "_test_counter"):
+                    self._test_counter = 0
+                self._test_counter += 1
+                test_lang = "ja" if self._test_counter % 2 == 0 else "en"
+            else:
+                test_lang = src
 
-        test_phrase = "Hello, where is the nearest station?" if test_lang == "en" else "こんにちは、駅はどこですか？"
+            test_phrase = "Hello, where is the nearest station?" if test_lang == "en" else "こんにちは、駅はどこですか？"
 
         # Generate audio using local TTS
         tts = TTSEngine("models_cache/tts")
@@ -824,23 +951,17 @@ class MainWindow(QMainWindow):
         self.target_badge.setText("Target: <1.5s (PASSED)" if target_met else "Target: <1.5s")
         self.target_badge.setStyleSheet(f"color: {target_color}; font-weight: bold;")
 
-        turn = self.manager.history[-1] if self.manager.history else None
-        if turn:
-            self.conversation_view.add_turn({
-                "speaker_lang": turn.speaker_lang,
-                "target_lang": turn.target_lang,
-                "original_text": turn.original_text,
-                "translated_text": turn.translated_text,
-                "stt_latency_ms": turn.stt_latency_ms,
-                "mt_latency_ms": turn.mt_latency_ms,
-                "tts_latency_ms": turn.tts_latency_ms,
-                "total_latency_ms": turn.total_latency_ms,
-                "time_str": time.strftime("%H:%M:%S", time.localtime(turn.timestamp))
-            })
+        if self.manager.history:
+            turn_dict = self.manager.get_history_as_dicts()[-1]
+            self.conversation_view.add_turn(turn_dict)
 
         self.vad_badge.setText("MIC LISTENING")
         self.vad_badge.setStyleSheet("background-color: #064e3b; color: #34d399; font-weight: bold; border-radius: 6px;")
-        self.status_label.setText("Translation complete. Ready for next utterance.")
+        if metrics.get("is_coach_turn"):
+            self.status_label.setText("AI Coach feedback ready. Spoken reply played aloud.")
+        else:
+            self.status_label.setText("Translation complete. Ready for next utterance.")
+
         if self.overlay_window and self.overlay_window.isVisible():
             self.overlay_window.set_active_state(True, is_speaking=False)
 
