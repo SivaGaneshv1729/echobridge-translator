@@ -69,3 +69,19 @@ def test_main_window_instantiation(qapp):
     assert window.tabs.count() == 2
     window.close()
     window.deleteLater()
+
+def test_subtitle_overlay_window(qapp):
+    from ui.overlay_window import SubtitleOverlayWindow
+    overlay = SubtitleOverlayWindow()
+    overlay.update_transcription("Hello world", "en")
+    assert "Hello world" in overlay.orig_label.text()
+    overlay.update_translation("こんにちは世界")
+    assert overlay.trans_label.text() == "こんにちは世界"
+    overlay.set_active_state(True, is_speaking=True)
+    assert "SPEAKING" in overlay.status_pill.text()
+    overlay.set_active_state(False)
+    assert "IDLE" in overlay.status_pill.text()
+    overlay._increase_font()
+    overlay._decrease_font()
+    overlay.close()
+    overlay.deleteLater()

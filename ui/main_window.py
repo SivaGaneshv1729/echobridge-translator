@@ -21,6 +21,7 @@ from pipeline.translator import TranslationPipeline
 from pipeline.conversation import ConversationManager, ConversationTurn
 from ui.conversation_view import ConversationView
 from ui.visualizer import SoundwaveVisualizer
+from ui.overlay_window import SubtitleOverlayWindow
 from ui.settings_view import SettingsDialog
 from engines.text_to_speech import TTSEngine
 
@@ -89,6 +90,7 @@ class MainWindow(QMainWindow):
 
         self.last_audio_bytes = b""
         self.last_sample_rate = 16000
+        self.overlay_window: Optional[SubtitleOverlayWindow] = None
 
         self.setup_ui()
         self.apply_dark_theme()
@@ -137,6 +139,11 @@ class MainWindow(QMainWindow):
             border: 1px solid #059669;
         """)
 
+        self.hud_btn = QPushButton("🪟 Subtitle Overlay")
+        self.hud_btn.setObjectName("headerActionBtn")
+        self.hud_btn.setFixedHeight(36)
+        self.hud_btn.clicked.connect(self.toggle_overlay_hud)
+
         self.export_btn = QPushButton("📥 Export Transcript")
         self.export_btn.setObjectName("headerActionBtn")
         self.export_btn.setFixedHeight(36)
@@ -156,6 +163,7 @@ class MainWindow(QMainWindow):
         header.addSpacing(16)
         header.addWidget(badge)
         header.addStretch()
+        header.addWidget(self.hud_btn)
         header.addWidget(self.export_btn)
         header.addWidget(self.clear_btn)
         header.addWidget(self.settings_btn)
@@ -550,11 +558,39 @@ class MainWindow(QMainWindow):
         """)
 
     # --- UI Event Handlers ---
+    def toggle_overlay_hud(self):
+        """Switch to compact floating subtitle overlay mode."""
+        if self.overlay_window is None:
+            self.overlay_window = SubtitleOverlayWindow()
+            self.overlay_window.restore_requested.connect(self.restore_from_overlay)
+            self.overlay_window.close_requested.connect(self.close_overlay)
+
+        is_rec = self.manager.pipeline.capture.is_recording
+        self.overlay_window.set_active_state(is_rec)
+        self.overlay_window.show()
+        self.hide()
+
+    def restore_from_overlay(self):
+        """Restore full application window from overlay mode."""
+        if self.overlay_window:
+            self.overlay_window.hide()
+        self.showNormal()
+        self.activateWindow()
+
+    def close_overlay(self):
+        """Close overlay and return to normal window."""
+        if self.overlay_window:
+            self.overlay_window.hide()
+        self.showNormal()
+        self.activateWindow()
+
     def toggle_microphone(self):
         pipeline = self.manager.pipeline
         if not pipeline.capture.is_recording:
             pipeline.start_listening()
             self.visualizer.set_active(True)
+            if self.overlay_window and self.overlay_window.isVisible():
+                self.overlay_window.set_active_state(True)
             self.mic_btn.setText("■  STOP LISTENING")
             self.mic_btn.setProperty("recording", True)
             self.mic_btn.style().unpolish(self.mic_btn)
@@ -565,6 +601,8 @@ class MainWindow(QMainWindow):
         else:
             pipeline.stop_listening(flush=True)
             self.visualizer.set_active(False)
+            if self.overlay_window and self.overlay_window.isVisible():
+                self.overlay_window.set_active_state(False)
             self.mic_btn.setText("▶  START LISTENING")
             self.mic_btn.setProperty("recording", False)
             self.mic_btn.style().unpolish(self.mic_btn)
@@ -729,6 +767,8 @@ class MainWindow(QMainWindow):
         self.vad_badge.setText("SPEAKING...")
         self.vad_badge.setStyleSheet("background-color: #92400e; color: #fbbf24; font-weight: bold; border-radius: 6px;")
         self.status_label.setText("Voice detected! Listening to speech...")
+        if self.overlay_window and self.overlay_window.isVisible():
+            self.overlay_window.set_active_state(True, is_speaking=True)
 
     @Slot(str, str, float)
     def on_transcription_ready(self, text: str, lang: str, lat: float):
@@ -737,12 +777,16 @@ class MainWindow(QMainWindow):
         self.vad_badge.setText("TRANSLATING...")
         self.vad_badge.setStyleSheet("background-color: #1e3a8a; color: #60a5fa; font-weight: bold; border-radius: 6px;")
         self.status_label.setText("Transcribed speech. Translating text...")
+        if self.overlay_window and self.overlay_window.isVisible():
+            self.overlay_window.update_transcription(text, lang)
 
     @Slot(str, float)
     def on_translation_ready(self, text: str, lat: float):
         self.trans_text.setPlainText(text)
         self.mt_lat_label.setText(f"MT: {lat:.0f} ms")
         self.status_label.setText("Translated. Synthesizing voice audio...")
+        if self.overlay_window and self.overlay_window.isVisible():
+            self.overlay_window.update_translation(text)
 
     @Slot(bytes, int, float)
     def on_synthesis_ready(self, audio: bytes, sr: int, lat: float):
@@ -779,6 +823,8 @@ class MainWindow(QMainWindow):
         self.vad_badge.setText("MIC LISTENING")
         self.vad_badge.setStyleSheet("background-color: #064e3b; color: #34d399; font-weight: bold; border-radius: 6px;")
         self.status_label.setText("Translation complete. Ready for next utterance.")
+        if self.overlay_window and self.overlay_window.isVisible():
+            self.overlay_window.set_active_state(True, is_speaking=False)
 
     @Slot(str)
     def on_error_occurred(self, err_msg: str):
@@ -786,6 +832,8 @@ class MainWindow(QMainWindow):
         self.status_label.setStyleSheet("color: #f87171; font-weight: bold;")
 
     def closeEvent(self, event):
+        if self.overlay_window:
+            self.overlay_window.close()
         self.manager.pipeline.stop_listening()
         self.manager.pipeline.playback.stop()
         event.accept()
