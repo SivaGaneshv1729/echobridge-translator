@@ -51,7 +51,10 @@ jobs:
           # 4. Configure debug signing for release build so APK is sideloadable
           sed -i 's/buildTypes {/buildTypes {\n        release {\n            signingConfig = signingConfigs.debug\n        }/' android/app/build.gradle
 
-          # 5. Ensure Gradle 8.5 in wrapper properties
+          # 5. Resolve duplicate native library conflicts between onnxruntime & sherpa_onnx
+          sed -i '/android {/a \    packagingOptions {\n        pickFirst "**/libonnxruntime.so"\n        pickFirst "**/libc++_shared.so"\n    }' android/app/build.gradle
+
+          # 6. Ensure Gradle 8.5 in wrapper properties
           sed -i 's/gradle-[0-9.]*-/gradle-8.5-/g' android/gradle/wrapper/gradle-wrapper.properties
 
           echo "=== Patched android/app/build.gradle ==="
