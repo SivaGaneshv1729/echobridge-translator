@@ -33,6 +33,18 @@ jobs:
         working-directory: mobile
         run: flutter pub get
 
+      - name: Generate Official Gradle Wrapper
+        working-directory: mobile
+        run: |
+          flutter create --platforms=android --org com.echobridge _temp_scaffold
+          mkdir -p android/gradle/wrapper
+          cp -f _temp_scaffold/android/gradlew android/gradlew
+          cp -f _temp_scaffold/android/gradlew.bat android/gradlew.bat
+          cp -f _temp_scaffold/android/gradle/wrapper/gradle-wrapper.jar android/gradle/wrapper/gradle-wrapper.jar
+          cp -f _temp_scaffold/android/gradle/wrapper/gradle-wrapper.properties android/gradle/wrapper/gradle-wrapper.properties
+          chmod +x android/gradlew
+          rm -rf _temp_scaffold
+
       - name: Build Universal Release APK
         working-directory: mobile
         run: flutter build apk --release
