@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/conversation_turn.dart';
+import '../../services/deck_service.dart';
 
 /// Modern conversational AI Language Coach card displaying user speech,
 /// grammatical feedback, natural corrections, and the coach's spoken conversational reply.
@@ -298,6 +299,27 @@ class CoachingBubbleWidget extends StatelessWidget {
                   foregroundColor: const Color(0xFF94A3B8),
                   side: const BorderSide(color: Color(0xFF334155)),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: () {
+                  DeckService().addFromTurn(turn);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("✓ Saved to Practice Deck!"),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.bookmark_add_rounded, size: 14, color: Color(0xFFFBBF24)),
+                label: const Text("Save Card"),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFFBBF24),
+                  side: const BorderSide(color: Color(0xFFD97706)),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                 ),

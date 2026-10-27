@@ -157,6 +157,12 @@ class MainWindow(QMainWindow):
         self.analytics_btn.setToolTip("View spoken fluency score, politeness breakdown, and scenario metrics (Ctrl+A)")
         self.analytics_btn.clicked.connect(self.open_analytics)
 
+        self.deck_btn = QPushButton("🎴 Practice Deck")
+        self.deck_btn.setObjectName("headerActionBtn")
+        self.deck_btn.setFixedHeight(36)
+        self.deck_btn.setToolTip("Review saved flashcards and study corrections with flip cards (Ctrl+D)")
+        self.deck_btn.clicked.connect(self.open_flashcards)
+
         self.clear_btn = QPushButton("🗑 Clear")
         self.clear_btn.setObjectName("headerActionBtn")
         self.clear_btn.setFixedHeight(36)
@@ -175,6 +181,7 @@ class MainWindow(QMainWindow):
         header.addStretch()
         header.addWidget(self.hud_btn)
         header.addWidget(self.analytics_btn)
+        header.addWidget(self.deck_btn)
         header.addWidget(self.export_btn)
         header.addWidget(self.clear_btn)
         header.addWidget(self.settings_btn)
@@ -854,6 +861,13 @@ class MainWindow(QMainWindow):
         from ui.analytics_dialog import AnalyticsDialog
         turns = self.manager.history if hasattr(self, "manager") else []
         dialog = AnalyticsDialog(turns, parent=self)
+        dialog.exec()
+
+    def open_flashcards(self):
+        """Opens the Practice Deck & Flashcard Review dialog."""
+        from ui.flashcard_dialog import FlashcardDialog
+        tts = getattr(self.manager.pipeline, "tts", None) if hasattr(self, "manager") else None
+        dialog = FlashcardDialog(tts_engine=tts, parent=self)
         dialog.exec()
 
     def open_settings(self):

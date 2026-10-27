@@ -7,6 +7,7 @@ import '../widgets/coaching_bubble.dart';
 import '../widgets/export_dialog.dart';
 import 'settings_screen.dart';
 import 'analytics_screen.dart';
+import 'flashcard_screen.dart';
 
 /// Main conversational screen for EchoBridge Mobile.
 class ConversationScreen extends StatefulWidget {
@@ -103,6 +104,23 @@ class _ConversationScreenState extends State<ConversationScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => AnalyticsScreen(history: _history)),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.style_rounded, color: Color(0xFFA78BFA)),
+            tooltip: "Practice Flashcards",
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => FlashcardScreen(
+                    onReplayAudio: () => _pipeline.replayVoice(
+                      "アイスコーヒーをひとつ、お願いします。",
+                      "ja",
+                    ),
+                  ),
+                ),
               );
             },
           ),

@@ -443,8 +443,14 @@ class CoachingBubble(QFrame):
         self.copy_btn.setFixedHeight(28)
         self.copy_btn.clicked.connect(self._on_copy_clicked)
 
+        self.deck_btn = QPushButton("⭐ Save to Deck")
+        self.deck_btn.setObjectName("coachActionBtn")
+        self.deck_btn.setFixedHeight(28)
+        self.deck_btn.clicked.connect(self._on_save_to_deck)
+
         footer.addWidget(self.replay_btn)
         footer.addWidget(self.copy_btn)
+        footer.addWidget(self.deck_btn)
         footer.addStretch()
 
         stt_ms = turn_data.get("stt_latency_ms", 0)
@@ -506,6 +512,20 @@ class CoachingBubble(QFrame):
         clipboard.setText(text)
         self.copy_btn.setText("✓ Copied!")
         QTimer.singleShot(1500, lambda: self.copy_btn.setText("📋 Copy Feedback"))
+
+    def _on_save_to_deck(self):
+        from pipeline.deck import PracticeDeck
+        deck = PracticeDeck()
+        deck.add_card(
+            original_text=self.turn_data.get("original_text", ""),
+            suggested_correction=self.turn_data.get("suggested_correction", "") or self.turn_data.get("original_text", ""),
+            grammar_notes=self.turn_data.get("grammar_notes", ""),
+            vocabulary_tips=self.turn_data.get("vocabulary_tips", []),
+            politeness_level=self.turn_data.get("politeness_level", ""),
+            scenario_id=self.turn_data.get("scenario_id", "free_talk")
+        )
+        self.deck_btn.setText("✓ Saved to Deck!")
+        self.deck_btn.setEnabled(False)
 
 
 class EmptyStateHero(QFrame):
