@@ -74,6 +74,18 @@ class CoachingBubbleWidget extends StatelessWidget {
                   style: const TextStyle(color: Color(0xFFA5B4FC), fontSize: 10, fontWeight: FontWeight.bold),
                 ),
               ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1B4B),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF4338CA)),
+                ),
+                child: Text(
+                  _scenarioTitle(turn.scenarioId),
+                  style: const TextStyle(color: Color(0xFFC7D2FE), fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+              ),
               if (turn.politenessLevel.isNotEmpty)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -300,5 +312,21 @@ class CoachingBubbleWidget extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  static String _scenarioTitle(String id) {
+    switch (id) {
+      case 'cafe':
+        return '🍵 Cafe';
+      case 'transit':
+        return '🚅 Transit';
+      case 'hotel':
+        return '🏨 Hotel';
+      case 'business':
+        return '💼 Business';
+      case 'free_talk':
+      default:
+        return '🗣️ Daily Talk';
+    }
   }
 }

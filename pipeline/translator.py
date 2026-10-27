@@ -226,6 +226,7 @@ class TranslationPipeline:
                     "politeness_level": coach_res.politeness_level,
                     "grammar_notes": coach_res.grammar_notes,
                     "vocabulary_tips": coach_res.vocabulary_tips,
+                    "scenario_id": getattr(coach_res, "scenario_id", "free_talk"),
                     "audio_duration_s": round(len(audio_data) / 16000, 2),
                     "stt_latency_ms": round(stt_ms, 2),
                     "mt_latency_ms": 0.0,

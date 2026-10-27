@@ -16,6 +16,7 @@ class ConversationTurn {
   final String politenessLevel;
   final String grammarNotes;
   final List<String> vocabularyTips;
+  final String scenarioId;
 
   ConversationTurn({
     required this.id,
@@ -34,6 +35,7 @@ class ConversationTurn {
     this.politenessLevel = '',
     this.grammarNotes = '',
     this.vocabularyTips = const [],
+    this.scenarioId = 'free_talk',
   });
 
   bool get isEnglishSpeaker => speakerLang == 'en';

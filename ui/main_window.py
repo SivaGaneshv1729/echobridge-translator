@@ -235,9 +235,28 @@ class MainWindow(QMainWindow):
         tgt_box.addWidget(self.tgt_label)
         tgt_box.addWidget(self.tgt_combo)
 
+        # Scenario Selector (Visible in Coach Mode)
+        self.scenario_box_widget = QWidget()
+        sc_box = QVBoxLayout(self.scenario_box_widget)
+        sc_box.setContentsMargins(0, 0, 0, 0)
+        self.scenario_label = QLabel("PRACTICE ROLE-PLAY SCENARIO")
+        self.scenario_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #a5b4fc;")
+        self.scenario_combo = QComboBox()
+        self.scenario_combo.setFixedHeight(38)
+        self.scenario_combo.addItem("🗣️ Free Conversation (日常会話)", "free_talk")
+        self.scenario_combo.addItem("🍵 Cafe & Dining (カフェ・飲食店)", "cafe")
+        self.scenario_combo.addItem("🚅 Transit & Directions (道案内・駅)", "transit")
+        self.scenario_combo.addItem("🏨 Hotel Check-in (ホテル・旅館)", "hotel")
+        self.scenario_combo.addItem("💼 Business & Interview (面接・ビジネス)", "business")
+        self.scenario_combo.currentIndexChanged.connect(self.on_scenario_changed)
+        sc_box.addWidget(self.scenario_label)
+        sc_box.addWidget(self.scenario_combo)
+        self.scenario_box_widget.hide()
+
         lang_row.addLayout(src_box, stretch=1)
         lang_row.addWidget(self.swap_btn, alignment=Qt.AlignBottom)
         lang_row.addLayout(tgt_box, stretch=1)
+        lang_row.addWidget(self.scenario_box_widget, stretch=1)
         ctrl_layout.addLayout(lang_row)
 
         self.update_mode_button_styles()
@@ -731,6 +750,8 @@ class MainWindow(QMainWindow):
             self.swap_btn.show()
             self.tgt_combo.show()
             self.tgt_label.show()
+            if hasattr(self, "scenario_box_widget"):
+                self.scenario_box_widget.hide()
             self.update_mode_button_styles()
             self.on_lang_combo_changed()
             self.status_label.setText("Live Translation Mode: Bidirectional speech translation between English & Japanese.")
@@ -747,12 +768,25 @@ class MainWindow(QMainWindow):
             self.swap_btn.setEnabled(False)
             self.tgt_combo.hide()
             self.tgt_label.hide()
+            if hasattr(self, "scenario_box_widget"):
+                self.scenario_box_widget.show()
+                # Apply current scenario to coach engine
+                if hasattr(self.manager.pipeline, "coach"):
+                    self.manager.pipeline.coach.set_scenario(self.scenario_combo.currentData())
             practice_lang = "ja"
             self.manager.pipeline.practice_lang = practice_lang
             self.manager.pipeline.set_languages(practice_lang, practice_lang)
             self.update_mode_button_styles()
             self.test_en_btn.setText("TEST COACH (JA)")
-            self.status_label.setText("AI Language Coach Mode: Speak Japanese naturally; the AI partner will reply aloud and provide instant grammar coaching.")
+            sc_text = self.scenario_combo.currentText()
+            self.status_label.setText(f"AI Language Coach Mode: Active scenario [{sc_text}]. Speak naturally for instant coaching & conversational reply.")
+
+    def on_scenario_changed(self):
+        sc_id = self.scenario_combo.currentData()
+        if hasattr(self.manager.pipeline, "coach"):
+            self.manager.pipeline.coach.set_scenario(sc_id)
+            sc_text = self.scenario_combo.currentText()
+            self.status_label.setText(f"AI Language Coach: Switched scenario to [{sc_text}].")
 
     def on_swap_clicked(self):
         if getattr(self.manager.pipeline, "app_mode", "translate") == "coach":

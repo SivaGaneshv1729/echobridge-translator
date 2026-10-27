@@ -283,8 +283,29 @@ class CoachingBubble(QFrame):
             border: 1px solid #1f2937;
         """)
 
+        scenario_id = turn_data.get("scenario_id", "free_talk")
+        scenario_labels = {
+            "cafe": "🍵 Cafe & Dining",
+            "transit": "🚅 Transit & Navigation",
+            "hotel": "🏨 Hotel & Travel",
+            "business": "💼 Business & Interview",
+            "free_talk": "🗣️ Daily Talk"
+        }
+        sc_name = scenario_labels.get(scenario_id, "🗣️ Daily Talk")
+        sc_badge = QLabel(sc_name)
+        sc_badge.setStyleSheet("""
+            background-color: #1e1b4b;
+            color: #c7d2fe;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: bold;
+            border: 1px solid #4338ca;
+        """)
+
         header.addWidget(coach_badge)
         header.addWidget(lang_badge)
+        header.addWidget(sc_badge)
         header.addWidget(polite_badge)
         header.addWidget(fluency_badge)
         header.addWidget(time_label)

@@ -132,6 +132,93 @@ class _ConversationScreenState extends State<ConversationScreen> {
       ),
       body: Column(
         children: [
+          // Mode Switcher Tabs
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF111827),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFF1F2937)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () {
+                      setState(() {
+                        _pipeline.appMode = "translate";
+                        _statusText = "Ready. Tap START to translate.";
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _pipeline.appMode == "translate" ? const Color(0xFF0284C7) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        "🌐 Live Translate",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: _pipeline.appMode == "translate" ? Colors.white : const Color(0xFF94A3B8),
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () {
+                      setState(() {
+                        _pipeline.appMode = "coach";
+                        _statusText = "AI Language Coach active. Speak Japanese!";
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _pipeline.appMode == "coach" ? const Color(0xFF4F46E5) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        "🎓 AI Coach",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: _pipeline.appMode == "coach" ? Colors.white : const Color(0xFF94A3B8),
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Role-Play Scenario Chips (When Coach Mode is Active)
+          if (_pipeline.appMode == "coach")
+            Container(
+              height: 38,
+              margin: const EdgeInsets.only(top: 4, bottom: 4),
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                children: [
+                  _buildScenarioChip('free_talk', '🗣️ Daily Talk'),
+                  _buildScenarioChip('cafe', '🍵 Cafe & Dining'),
+                  _buildScenarioChip('transit', '🚅 Transit & Nav'),
+                  _buildScenarioChip('hotel', '🏨 Hotel'),
+                  _buildScenarioChip('business', '💼 Business'),
+                ],
+              ),
+            ),
+
           // Audio Visualizer Card
           Container(
             margin: const EdgeInsets.all(12),
@@ -147,7 +234,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      _pipeline.mode == "auto" ? "✨ AUTO VICE-VERSA (EN ⇄ JA)" : (_pipeline.mode == "en" ? "EN ➔ JA" : "JA ➔ EN"),
+                      _pipeline.appMode == "coach"
+                          ? "🎓 AI COACH SCENARIO: ${_pipeline.scenario.toUpperCase()}"
+                          : (_pipeline.mode == "auto" ? "✨ AUTO VICE-VERSA (EN ⇄ JA)" : (_pipeline.mode == "en" ? "EN ➔ JA" : "JA ➔ EN")),
                       style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w700),
                     ),
                     Container(
@@ -193,23 +282,25 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text("🎙️ ⇄ 🌐", style: TextStyle(fontSize: 42)),
+                          Text(_pipeline.appMode == "coach" ? "🎓 ⇄ 💬" : "🎙️ ⇄ 🌐", style: const TextStyle(fontSize: 42)),
                           const SizedBox(height: 12),
-                          const Text(
-                            "Ready for Real-Time Translation",
-                            style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800),
+                          Text(
+                            _pipeline.appMode == "coach" ? "AI Language Coach Ready" : "Ready for Real-Time Translation",
+                            style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800),
                           ),
                           const SizedBox(height: 8),
-                          const Text(
-                            "Tap the microphone button below to start.\nEchoBridge automatically translates between English and Japanese 100% offline.",
+                          Text(
+                            _pipeline.appMode == "coach"
+                                ? "Practice Japanese naturally. The AI partner replies aloud and provides instant grammar, fluency, and politeness tips."
+                                : "Tap the microphone button below to start.\nEchoBridge automatically translates between English and Japanese 100% offline.",
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, height: 1.4),
+                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13, height: 1.4),
                           ),
                           const SizedBox(height: 20),
                           ElevatedButton.icon(
                             onPressed: _simulateViceVersa,
                             icon: const Icon(Icons.flash_on_rounded, size: 16),
-                            label: const Text("Simulate Conversation Turn"),
+                            label: Text(_pipeline.appMode == "coach" ? "Simulate Coach Practice" : "Simulate Conversation Turn"),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF1E293B),
                               foregroundColor: const Color(0xFF38BDF8),
@@ -267,11 +358,15 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       onPressed: _toggleListening,
                       icon: Icon(_isListening ? Icons.stop_rounded : Icons.mic_rounded),
                       label: Text(
-                        _isListening ? "STOP LISTENING" : "START LISTENING",
+                        _isListening
+                            ? "STOP LISTENING"
+                            : (_pipeline.appMode == "coach" ? "START PRACTICE" : "START LISTENING"),
                         style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.5),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _isListening ? const Color(0xFFDC2626) : const Color(0xFF059669),
+                        backgroundColor: _isListening
+                            ? const Color(0xFFDC2626)
+                            : (_pipeline.appMode == "coach" ? const Color(0xFF4F46E5) : const Color(0xFF059669)),
                         foregroundColor: Colors.white,
                         minimumSize: const Size(0, 48),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -310,4 +405,35 @@ class _ConversationScreenState extends State<ConversationScreen> {
       ),
     );
   }
+
+  Widget _buildScenarioChip(String id, String label) {
+    final isSelected = _pipeline.scenario == id;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: FilterChip(
+        selected: isSelected,
+        label: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        backgroundColor: const Color(0xFF1E293B),
+        selectedColor: const Color(0xFF4338CA),
+        checkmarkColor: Colors.white,
+        side: BorderSide(
+          color: isSelected ? const Color(0xFF6366F1) : const Color(0xFF334155),
+        ),
+        onSelected: (val) {
+          setState(() {
+            _pipeline.scenario = id;
+            _statusText = "Switched to $label. Speak Japanese to practice!";
+          });
+        },
+      ),
+    );
+  }
 }
+

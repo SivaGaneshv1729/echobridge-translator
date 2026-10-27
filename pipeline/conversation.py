@@ -27,6 +27,7 @@ class ConversationTurn:
     politeness_level: str = ""
     grammar_notes: str = ""
     vocabulary_tips: List[str] = field(default_factory=list)
+    scenario_id: str = "free_talk"
 
 class ConversationManager:
     """Manages two-way conversational flow, history, and direction switching."""
@@ -76,7 +77,8 @@ class ConversationManager:
             is_natural=metrics.get("is_natural", True),
             politeness_level=metrics.get("politeness_level", ""),
             grammar_notes=metrics.get("grammar_notes", ""),
-            vocabulary_tips=metrics.get("vocabulary_tips", [])
+            vocabulary_tips=metrics.get("vocabulary_tips", []),
+            scenario_id=metrics.get("scenario_id", "free_talk")
         )
         self.history.append(turn)
         logger.info(f"Recorded Conversation Turn #{turn.id}: [{turn.speaker_lang} -> {turn.target_lang}] '{turn.original_text}'")
