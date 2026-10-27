@@ -6,6 +6,7 @@ import '../widgets/chat_bubble.dart';
 import '../widgets/coaching_bubble.dart';
 import '../widgets/export_dialog.dart';
 import 'settings_screen.dart';
+import 'analytics_screen.dart';
 
 /// Main conversational screen for EchoBridge Mobile.
 class ConversationScreen extends StatefulWidget {
@@ -95,6 +96,16 @@ class _ConversationScreenState extends State<ConversationScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.bar_chart_rounded, color: Color(0xFF38BDF8)),
+            tooltip: "Fluency & Analytics",
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => AnalyticsScreen(history: _history)),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.download_rounded, color: Color(0xFF94A3B8)),
             tooltip: "Export Transcript",

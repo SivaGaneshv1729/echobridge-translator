@@ -151,6 +151,12 @@ class MainWindow(QMainWindow):
         self.export_btn.setToolTip("Save formatted conversation transcript to a text file (Ctrl+E)")
         self.export_btn.clicked.connect(self.export_transcript)
 
+        self.analytics_btn = QPushButton("📊 Fluency Analytics")
+        self.analytics_btn.setObjectName("headerActionBtn")
+        self.analytics_btn.setFixedHeight(36)
+        self.analytics_btn.setToolTip("View spoken fluency score, politeness breakdown, and scenario metrics (Ctrl+A)")
+        self.analytics_btn.clicked.connect(self.open_analytics)
+
         self.clear_btn = QPushButton("🗑 Clear")
         self.clear_btn.setObjectName("headerActionBtn")
         self.clear_btn.setFixedHeight(36)
@@ -168,6 +174,7 @@ class MainWindow(QMainWindow):
         header.addWidget(badge)
         header.addStretch()
         header.addWidget(self.hud_btn)
+        header.addWidget(self.analytics_btn)
         header.addWidget(self.export_btn)
         header.addWidget(self.clear_btn)
         header.addWidget(self.settings_btn)
@@ -841,6 +848,13 @@ class MainWindow(QMainWindow):
             self.manager.pipeline.set_languages("ja", "en")
             self.status_label.setText("Active direction: JA ➔ EN (Japanese to English)")
             self.test_en_btn.setText("TEST SAMPLE (JA ➔ EN)")
+
+    def open_analytics(self):
+        """Opens the Fluency & Learning Analytics dashboard dialog."""
+        from ui.analytics_dialog import AnalyticsDialog
+        turns = self.manager.history if hasattr(self, "manager") else []
+        dialog = AnalyticsDialog(turns, parent=self)
+        dialog.exec()
 
     def open_settings(self):
         dialog = SettingsDialog(self.config_path, self)
