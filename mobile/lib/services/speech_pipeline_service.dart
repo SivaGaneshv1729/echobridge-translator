@@ -99,6 +99,12 @@ class SpeechPipelineService {
     _utteranceBuffer.clear();
   }
 
+  /// Generates a test or simulated conversation/coach turn directly without requiring physical microphone streaming.
+  Future<void> simulateTurn() async {
+    final dummyBytes = Uint8List(24000);
+    await _processSpeechChunk(dummyBytes);
+  }
+
   /// Handles incoming 16kHz PCM chunks and detects end-of-speech pause.
   void _handlePcmChunk(Uint8List chunk) {
     _utteranceBuffer.add(chunk);
@@ -166,16 +172,53 @@ class SpeechPipelineService {
         final speakerLang = _mode == "auto" ? (isSimulatedJa ? "ja" : "en") : _mode;
         final targetLang = speakerLang == "en" ? "ja" : "en";
 
-        final originalText = speakerLang == "en"
-            ? "Where is the nearest entrance to the station?"
-            : "この先をまっすぐ進むと、右手に駅の改札がありますよ。";
+        final List<Map<String, String>> enSamples = [
+          {
+            "orig": "Where is the nearest entrance to the station?",
+            "trans": "最寄りの駅の入口はどこにありますか？",
+          },
+          {
+            "orig": "Could you please tell me how much this costs?",
+            "trans": "これはいくらか教えていただけますか？",
+          },
+          {
+            "orig": "Can I pay by credit card or transit IC card?",
+            "trans": "クレジットカードや交通系ICカードで支払えますか？",
+          },
+          {
+            "orig": "Thank you very much for your kind help!",
+            "trans": "ご親切に助けていただき、本当にありがとうございます！",
+          },
+        ];
+
+        final List<Map<String, String>> jaSamples = [
+          {
+            "orig": "この先をまっすぐ進むと、右手に駅の改札がありますよ。",
+            "trans": "If you go straight ahead, you will find the station ticket gate on your right.",
+          },
+          {
+            "orig": "こちらの商品は税込みで千二百円になります。",
+            "trans": "This item is 1,200 yen including tax.",
+          },
+          {
+            "orig": "はい、交通系ICカードもご利用いただけますよ。",
+            "trans": "Yes, transit IC cards are accepted as well.",
+          },
+          {
+            "orig": "どういたしまして。どうぞ良い一日をお過ごしください！",
+            "trans": "You are very welcome. Have a wonderful day!",
+          },
+        ];
+
+        final sampleIndex = (_turnCounter ~/ 2) % (speakerLang == "en" ? enSamples.length : jaSamples.length);
+        final sample = speakerLang == "en" ? enSamples[sampleIndex] : jaSamples[sampleIndex];
+
+        final originalText = sample["orig"]!;
 
         // 2. Machine Translation (MarianMT INT8)
         onStatusChanged?.call("Translating $speakerLang ➔ $targetLang...");
         final t1 = DateTime.now();
-        final translatedText = speakerLang == "en"
-            ? "最寄りの駅の入口はどこにありますか？"
-            : "If you go straight ahead, you will find the station ticket gate on your right.";
+        final translatedText = sample["trans"]!;
         final mtDuration = DateTime.now().difference(t1).inMilliseconds.toDouble() + 110.0;
 
         // 3. Text-to-Speech (Piper VITS ONNX)

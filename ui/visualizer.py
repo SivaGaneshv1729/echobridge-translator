@@ -2,7 +2,7 @@
 import math
 import numpy as np
 from PySide6.QtWidgets import QWidget
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QRectF
 from PySide6.QtGui import QPainter, QColor, QBrush
 
 class SoundwaveVisualizer(QWidget):
@@ -115,6 +115,10 @@ class SoundwaveVisualizer(QWidget):
 
             painter.setBrush(QBrush(color))
             painter.setPen(Qt.NoPen)
-            painter.drawRoundedRect(bx, by, bar_width, bh, bar_width / 2.0, bar_width / 2.0)
+            painter.drawRoundedRect(
+                QRectF(float(bx), float(by), float(bar_width), float(bh)),
+                float(bar_width / 2.0),
+                float(bar_width / 2.0)
+            )
 
         painter.end()

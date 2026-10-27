@@ -291,10 +291,17 @@ class TranslationPipeline:
                 self.on_error(str(e))
             return None
 
-    def start_listening(self):
-        """Start capturing microphone audio."""
+    def start_listening(self) -> bool:
+        """Start capturing microphone audio. Returns True on success, False if audio device failed."""
         self.segmenter.reset()
-        self.capture.start()
+        try:
+            self.capture.start()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to start audio capture: {e}", exc_info=True)
+            if self.on_error:
+                self.on_error(f"Microphone start error: {e}")
+            return False
 
     def stop_listening(self, flush: bool = True):
         """Stop microphone audio capture. If flush=True, process any pending speech recorded before stopping."""

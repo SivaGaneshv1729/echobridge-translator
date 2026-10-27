@@ -13,14 +13,19 @@ def qapp():
 
 def test_soundwave_visualizer(qapp):
     from ui.visualizer import SoundwaveVisualizer
+    from PySide6.QtGui import QPixmap
     viz = SoundwaveVisualizer(num_bars=36)
     assert viz.num_bars == 36
+    viz.resize(300, 80)
     viz.set_active(True)
     assert viz.is_active is True
     viz.set_level(0.75)
     # Check that heights are populated
     assert viz.target_heights.max() > 0.0
     viz._animate_tick()
+    # Explicitly test paintEvent rendering to prevent Shiboken float overflow regressions
+    pixmap = QPixmap(300, 80)
+    viz.render(pixmap)
     viz.set_active(False)
     assert viz.is_active is False
     viz.deleteLater()

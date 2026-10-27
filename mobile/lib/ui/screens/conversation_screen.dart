@@ -64,8 +64,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
     });
   }
 
-  void _simulateViceVersa() {
-    _pipeline.toggleListening();
+  void _simulateViceVersa() async {
+    await _pipeline.simulateTurn();
   }
 
   @override

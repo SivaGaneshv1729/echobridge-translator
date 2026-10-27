@@ -660,7 +660,11 @@ class MainWindow(QMainWindow):
     def toggle_microphone(self):
         pipeline = self.manager.pipeline
         if not pipeline.capture.is_recording:
-            pipeline.start_listening()
+            success = pipeline.start_listening()
+            if not success:
+                self.status_label.setText("Microphone access failed. Please check sound settings or use TEST buttons.")
+                self.status_label.setStyleSheet("color: #f87171; font-weight: bold;")
+                return
             self.visualizer.set_active(True)
             if self.overlay_window and self.overlay_window.isVisible():
                 self.overlay_window.set_active_state(True)
@@ -669,6 +673,7 @@ class MainWindow(QMainWindow):
             self.mic_btn.style().unpolish(self.mic_btn)
             self.mic_btn.style().polish(self.mic_btn)
             self.status_label.setText("Listening for speech... Speak into your microphone now.")
+            self.status_label.setStyleSheet("")
             self.vad_badge.setText("MIC ACTIVE")
             self.vad_badge.setStyleSheet("background-color: #064e3b; color: #34d399; font-weight: bold; border-radius: 6px;")
         else:
@@ -681,13 +686,17 @@ class MainWindow(QMainWindow):
             self.mic_btn.style().unpolish(self.mic_btn)
             self.mic_btn.style().polish(self.mic_btn)
             self.status_label.setText("Microphone stopped. Processing any pending speech...")
+            self.status_label.setStyleSheet("")
             self.vad_badge.setText("MIC IDLE")
             self.vad_badge.setStyleSheet("background-color: #1f2937; color: #64748b; font-weight: bold; border-radius: 6px;")
 
     def on_ptt_pressed(self):
         pipeline = self.manager.pipeline
         if not pipeline.capture.is_recording:
-            pipeline.start_listening()
+            success = pipeline.start_listening()
+            if not success:
+                self.status_label.setText("Microphone access failed. Please check sound settings.")
+                return
             self.visualizer.set_active(True)
             self.status_label.setText("Push-to-Talk active: Speaking...")
             self.vad_badge.setText("HOLDING PTT")
@@ -952,8 +961,8 @@ class MainWindow(QMainWindow):
 
             test_phrase = "Hello, where is the nearest station?" if test_lang == "en" else "こんにちは、駅はどこですか？"
 
-        # Generate audio using local TTS
-        tts = TTSEngine("models_cache/tts")
+        # Generate audio using local TTS (reuse existing loaded engine)
+        tts = getattr(self.manager.pipeline, "tts", None) or TTSEngine("models_cache/tts")
         pcm, sr, _ = tts.synthesize(test_phrase, test_lang)
         audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
         if sr != 16000:

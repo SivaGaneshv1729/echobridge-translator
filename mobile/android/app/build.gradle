@@ -49,6 +49,11 @@ android {
         multiDexEnabled true
     }
 
+    packagingOptions {
+        pickFirst "**/libonnxruntime.so"
+        pickFirst "**/libc++_shared.so"
+    }
+
     buildTypes {
         release {
             signingConfig signingConfigs.debug
