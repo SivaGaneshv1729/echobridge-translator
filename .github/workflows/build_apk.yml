@@ -29,23 +29,33 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Scaffold Canonical Android Platform
+        working-directory: mobile
+        run: |
+          # 1. Back up custom AndroidManifest.xml
+          cp android/app/src/main/AndroidManifest.xml /tmp/AndroidManifest.xml 2>/dev/null || true
+
+          # 2. Clean out partial android scaffolding and let Flutter CLI generate canonical files
+          rm -rf android
+          flutter create --platforms=android --org com.echobridge .
+
+          # 3. Restore custom AndroidManifest.xml with microphone & foreground service permissions
+          cp /tmp/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+
+          # 4. Ensure minSdkVersion >= 24 for sherpa_onnx and compileSdk 35 for audioplayers
+          sed -i 's/minSdkVersion = flutter.minSdkVersion/minSdkVersion = 24/g' android/app/build.gradle
+          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 24/g' android/app/build.gradle
+          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/g' android/app/build.gradle
+          sed -i 's/compileSdk flutter.compileSdkVersion/compileSdk 35/g' android/app/build.gradle
+
+          # 5. Ensure Gradle 8.5+ in wrapper
+          sed -i 's/gradle-[0-9.]*-/gradle-8.5-/g' android/gradle/wrapper/gradle-wrapper.properties 2>/dev/null || true
+
       - name: Install Dependencies
         working-directory: mobile
         run: |
           flutter pub get
           find /home/runner/.pub-cache -name "build.gradle" -exec sed -i 's/flutter.compileSdkVersion/35/g' {} + 2>/dev/null || true
-
-      - name: Prepare Official Gradle Wrapper
-        working-directory: mobile
-        run: |
-          flutter create --platforms=android --org com.echobridge _temp_scaffold
-          mkdir -p android/gradle/wrapper
-          cp -f _temp_scaffold/android/gradlew android/gradlew
-          cp -f _temp_scaffold/android/gradlew.bat android/gradlew.bat
-          cp -f _temp_scaffold/android/gradle/wrapper/gradle-wrapper.jar android/gradle/wrapper/gradle-wrapper.jar
-          chmod +x android/gradlew
-          rm -rf _temp_scaffold
-          sed -i 's/gradle-[0-9.]*-/gradle-8.5-/g' android/gradle/wrapper/gradle-wrapper.properties
 
       - name: Build Universal Release APK
         working-directory: mobile
