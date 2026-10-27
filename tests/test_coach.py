@@ -109,3 +109,33 @@ def test_conversation_view_with_coach_and_export(qapp, tmp_path):
     assert "Suggested Phrasing: どこへ行きますか？" in content
     assert "Grammar Coaching:   Added direction particle 'へ'." in content
     cv.deleteLater()
+
+def test_coach_multi_turn_memory():
+    engine = LanguageCoachEngine(provider="builtin", scenario="free_talk")
+    # Turn 1: Self-introduction with user name
+    res1 = engine.evaluate_and_reply("私は田中健二です。よろしくお願いします。", practice_lang="ja")
+    assert engine.memory_store["user_name"] == "田中健二"
+    assert len(engine.conversation_history) == 2
+
+    # Turn 2: Mention hobby
+    res2 = engine.evaluate_and_reply("趣味は映画を見ることです。", practice_lang="ja")
+    assert len(engine.conversation_history) == 4
+    assert any("映画" in tip or "映画" in res2.reply_text for tip in (res2.vocabulary_tips or [res2.reply_text]))
+
+    # Test clearing history
+    engine.clear_history()
+    assert len(engine.conversation_history) == 0
+    assert engine.memory_store["user_name"] is None
+
+def test_coach_scenario_state_progression():
+    engine = LanguageCoachEngine(provider="builtin", scenario="cafe")
+    # Stage 0 -> 1: Order item
+    res1 = engine.evaluate_and_reply("アイスカフェラテをひとつお願いします。", practice_lang="ja")
+    assert engine.memory_store["scenario_stage"] >= 2
+    assert "サイズ" in res1.reply_text or "店内" in res1.reply_text
+
+    # Stage 2 -> 3: Customization (M size, dine-in)
+    res2 = engine.evaluate_and_reply("Mサイズで、店内でお願いします。", practice_lang="ja")
+    assert engine.memory_store["scenario_stage"] >= 3
+    assert "円" in res2.reply_text or "会計" in res2.reply_text
+

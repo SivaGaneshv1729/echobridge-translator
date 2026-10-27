@@ -1,7 +1,7 @@
 """Speech Recognition Engine using Faster-Whisper (CTranslate2 INT8)."""
 import time
 import logging
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 import numpy as np
 from faster_whisper import WhisperModel
 
@@ -49,12 +49,16 @@ class SpeechRecognizer:
         self,
         audio_data: np.ndarray,
         language: Optional[str] = None,
-        beam_size: int = 1,
+        beam_size: int = 3,
+        best_of: int = 3,
+        patience: float = 1.0,
         temperature: float = 0.0,
-        initial_prompt: Optional[str] = None
+        initial_prompt: Optional[str] = None,
+        context_history: Optional[List[str]] = None,
+        hotwords: Optional[str] = None
     ) -> Tuple[str, str, float]:
         """
-        Transcribe audio numpy array (16kHz mono float32).
+        Transcribe audio numpy array (16kHz mono float32) using multi-turn conversational context knowledge.
         Returns: (transcribed_text, detected_language, latency_ms)
         """
         if audio_data is None or len(audio_data) == 0:
@@ -62,24 +66,63 @@ class SpeechRecognizer:
 
         t0 = time.perf_counter()
 
-        # Context prompt to maximize accuracy and proper punctuation
-        if initial_prompt is None:
+        # Build dynamic context-aware prompt using conversation history
+        prompt_parts = []
+        if context_history:
+            recent_context = " ".join([h.strip() for h in context_history[-4:] if h.strip()])
+            if recent_context:
+                # Keep context concise to avoid exceeding Whisper prompt tokens
+                if len(recent_context) > 280:
+                    recent_context = recent_context[-280:]
+                prompt_parts.append(f"Conversation context: {recent_context}.")
+
+        if initial_prompt:
+            prompt_parts.append(initial_prompt)
+        else:
             if language == "en":
-                initial_prompt = "Hello, this is a clear conversational dialogue."
+                prompt_parts.append("Conversational English dialogue: Clear speech, punctuation, question marks, and full sentences.")
             elif language == "ja":
-                initial_prompt = "こんにちは、よろしくお願いします。"
+                prompt_parts.append("自然な日本語の会話：です、ます、敬語、日常表現、句読点を含む丁寧な対話。")
             else:
-                initial_prompt = "Hello, こんにちは, conversational speech translation."
-        
-        segments, info = self.model.transcribe(
-            audio_data,
-            language=language,
-            beam_size=beam_size,
-            temperature=temperature,
-            initial_prompt=initial_prompt,
-            condition_on_previous_text=False,
-            vad_filter=False # VAD is already handled upstream
-        )
+                prompt_parts.append("Bilingual English and Japanese natural conversation: Hello, こんにちは, よろしくお願いします。")
+
+        full_prompt = " ".join(prompt_parts)
+
+        # Standard hotwords for travel, everyday dialogue, and polite speech
+        default_hotwords = hotwords
+        if not default_hotwords:
+            if language == "ja":
+                default_hotwords = "駅 改札 おすすめ お願いします ありがとうございます です ます どこ"
+            elif language == "en":
+                default_hotwords = "station entrance recommend please thank you bill check where"
+
+        try:
+            segments, info = self.model.transcribe(
+                audio_data,
+                language=language,
+                beam_size=beam_size,
+                best_of=best_of,
+                patience=patience,
+                temperature=temperature,
+                initial_prompt=full_prompt,
+                repetition_penalty=1.1,
+                no_repeat_ngram_size=3,
+                hallucination_silence_threshold=1.5,
+                hotwords=default_hotwords,
+                condition_on_previous_text=False,
+                vad_filter=False # VAD is already handled upstream
+            )
+        except TypeError:
+            # Fallback for environments with minimal parameter signatures
+            segments, info = self.model.transcribe(
+                audio_data,
+                language=language,
+                beam_size=beam_size,
+                temperature=temperature,
+                initial_prompt=full_prompt,
+                condition_on_previous_text=False,
+                vad_filter=False
+            )
         
         text_segments = [s.text.strip() for s in segments if s.text.strip()]
         full_text = " ".join(text_segments).strip()

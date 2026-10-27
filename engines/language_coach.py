@@ -1,5 +1,6 @@
 """AI Language Tutor and Conversational Coach Engine for EchoBridge.
-Supports Hybrid Local Heuristic Engine, Local Ollama (Qwen2.5/Llama3), and OpenAI-compatible endpoints.
+Supports Stateful Multi-Turn Conversational Memory, Contextual Grammar Analysis,
+Hybrid Local Heuristic Engine, Local Ollama (Qwen2.5/Llama3), and OpenAI-compatible endpoints.
 Includes Situational Role-Play Scenarios (Dining, Transit, Hotel, Business, Free Talk).
 """
 import json
@@ -16,39 +17,39 @@ COACH_SCENARIOS: Dict[str, Dict[str, Any]] = {
     "free_talk": {
         "id": "free_talk",
         "title": "🗣️ Free Conversation / 日常会話",
-        "description": "General casual conversation and everyday practice.",
+        "description": "General casual conversation, hobbies, daily life, and dynamic topic exploration.",
         "icon": "💬",
-        "role_ja": "親しみやすい会話パートナーとして、日常の話題について楽しく自然に会話してください。",
-        "role_en": "You are a friendly conversation partner. Engage in casual small talk on everyday topics."
+        "role_ja": "親しみやすい会話パートナーとして、日常の話題について楽しく自然に会話してください。前の発言を覚えて文脈を繋げてください。",
+        "role_en": "You are a friendly conversation partner. Engage in casual small talk on everyday topics and remember previous turns."
     },
     "cafe": {
         "id": "cafe",
         "title": "🍵 Cafe & Dining / カフェ・飲食店",
-        "description": "Practice ordering, asking for recommendations, and paying the bill.",
+        "description": "Practice greeting, ordering items, customization (size/hot/ice), dine-in/take-out, and paying the bill.",
         "icon": "☕",
         "role_ja": "日本の居酒屋またはカフェの店員として、丁寧な接客言葉（いらっしゃいませ、ご注文はお決まりですか、など）で対応してください。",
-        "role_en": "You are a polite waiter at a restaurant or cafe. Help the customer order, suggest specials, and take their order."
+        "role_en": "You are a polite waiter at a restaurant or cafe. Help the customer order, suggest specials, take customizations, and process payment."
     },
     "transit": {
         "id": "transit",
         "title": "🚅 Transit & Directions / 道案内・駅",
-        "description": "Practice asking for station exits, landmarks, and train lines.",
+        "description": "Practice asking for station exits, landmarks, train lines, platforms, travel times, and fares.",
         "icon": "🗺️",
-        "role_ja": "駅員または親切な地元の人として、目的地への道順や電車の乗り換えを分かりやすく案内してください。",
-        "role_en": "You are a helpful local resident or station attendant. Guide the user with clear transit directions."
+        "role_ja": "駅員または親切な地元の人として、目的地への道順、ホーム番号、電車の乗り換えや所要時間を分かりやすく案内してください。",
+        "role_en": "You are a helpful local resident or station attendant. Guide the user with clear transit directions, platforms, and fares."
     },
     "hotel": {
         "id": "hotel",
         "title": "🏨 Hotel Check-in / ホテル・旅館",
-        "description": "Hotel check-in, asking about breakfast, check-out times, and amenities.",
+        "description": "Hotel check-in, name confirmation, room key, breakfast times, Wi-Fi, and luggage storage.",
         "icon": "🛎️",
-        "role_ja": "ホテルのフロント係として、丁寧な敬語（かしこまりました、恐れ入ります、など）でチェックイン手続きと案内をしてください。",
-        "role_en": "You are a hotel front desk receptionist. Assist the guest with check-in, amenities, and travel queries."
+        "role_ja": "ホテルのフロント係として、丁寧な敬語（かしこまりました、恐れ入ります、など）でチェックイン手続きと館内案内をしてください。",
+        "role_en": "You are a hotel front desk receptionist. Assist the guest with check-in, room amenities, and luggage storage."
     },
     "business": {
         "id": "business",
         "title": "💼 Business & Interview / 面接・ビジネス",
-        "description": "Formal self-introduction, job interview questions, and keigo practice.",
+        "description": "Formal self-introduction, work experience, project leadership, and polite honorifics (Keigo).",
         "icon": "👔",
         "role_ja": "企業の面接官またはビジネス同僚として、礼儀正しいビジネス敬語で対話し、適切な表現を促してください。",
         "role_en": "You are a professional hiring manager or business colleague. Ask career questions and evaluate response structure."
@@ -70,7 +71,7 @@ class CoachingResult:
     scenario_id: str = "free_talk"
 
 class LanguageCoachEngine:
-    """Evaluates speech utterances, provides conversational replies, and explains communication improvements."""
+    """Evaluates speech utterances with multi-turn conversation memory, context tracking, and granular grammar coaching."""
 
     def __init__(
         self,
@@ -90,10 +91,35 @@ class LanguageCoachEngine:
         self.api_model = api_model
         self.scenario = scenario if scenario in COACH_SCENARIOS else "free_talk"
 
+        # Multi-turn conversational memory & entity store
+        self.conversation_history: List[Dict[str, str]] = []
+        self.memory_store: Dict[str, Any] = {
+            "user_name": None,
+            "destination": None,
+            "ordered_items": [],
+            "scenario_stage": 0,
+            "topics": []
+        }
+
+    def clear_history(self):
+        """Reset conversation memory and dialogue state."""
+        self.conversation_history.clear()
+        self.memory_store = {
+            "user_name": None,
+            "destination": None,
+            "ordered_items": [],
+            "scenario_stage": 0,
+            "topics": []
+        }
+        logger.info("Language Coach conversation history and context memory cleared.")
+
     def set_scenario(self, scenario_id: str) -> bool:
-        """Switch active role-play practice scenario."""
+        """Switch active role-play practice scenario and reset stage."""
         if scenario_id in COACH_SCENARIOS:
             self.scenario = scenario_id
+            self.memory_store["scenario_stage"] = 0
+            self.memory_store["destination"] = None
+            self.memory_store["ordered_items"] = []
             logger.info(f"Language Coach scenario switched to: {scenario_id}")
             return True
         logger.warning(f"Unknown scenario ID: {scenario_id}")
@@ -106,7 +132,8 @@ class LanguageCoachEngine:
 
     def evaluate_and_reply(self, user_text: str, practice_lang: str = "ja") -> CoachingResult:
         """
-        Evaluate user's spoken sentence and generate a conversational reply + coaching notes.
+        Evaluate user's spoken sentence and generate a conversational reply + coaching notes
+        with multi-turn conversational memory.
         """
         user_text = user_text.strip()
         if not user_text:
@@ -126,21 +153,32 @@ class LanguageCoachEngine:
         if self.provider == "ollama":
             result = self._query_ollama(user_text, practice_lang)
             if result:
+                self._record_turn(user_text, result.reply_text)
                 return result
 
         # 2. Try Cloud / Custom API if configured
         if self.provider == "api" and self.api_url and self.api_key:
             result = self._query_api(user_text, practice_lang)
             if result:
+                self._record_turn(user_text, result.reply_text)
                 return result
 
-        # 3. Default: High-performance Builtin Heuristic Evaluator
-        return self._evaluate_builtin(user_text, practice_lang)
+        # 3. Default: High-performance Builtin Multi-Turn Heuristic Evaluator
+        result = self._evaluate_builtin(user_text, practice_lang)
+        self._record_turn(user_text, result.reply_text)
+        return result
+
+    def _record_turn(self, user_text: str, reply_text: str):
+        """Append turn to conversation memory and retain up to 16 turns."""
+        self.conversation_history.append({"role": "user", "content": user_text})
+        self.conversation_history.append({"role": "assistant", "content": reply_text})
+        if len(self.conversation_history) > 16:
+            self.conversation_history = self.conversation_history[-16:]
 
     def _evaluate_builtin(self, text: str, lang: str) -> CoachingResult:
         """
-        Instant 100% offline rule-based & linguistic pattern analyzer for Japanese and English.
-        Detects particle misuse, politeness levels, unnatural phrasing, and generates contextual replies.
+        Instant 100% offline rule-based & linguistic pattern analyzer for Japanese and English
+        with multi-turn state tracking and entity memory.
         """
         if lang == "ja":
             return self._evaluate_japanese_builtin(text)
@@ -148,16 +186,23 @@ class LanguageCoachEngine:
             return self._evaluate_english_builtin(text)
 
     def _evaluate_japanese_builtin(self, text: str) -> CoachingResult:
-        """Analyze Japanese grammar, politeness, and particle usage with scenario awareness."""
+        """Analyze Japanese grammar, politeness, and particle usage with multi-turn memory."""
         text_clean = text.strip()
         notes = []
         vocab_tips = []
         suggested = text_clean
         is_natural = True
 
+        # Extract name entity if introduced
+        name_match = re.search(r'(?:私|僕|自分)は\s*([^\s、。]+?)\s*(?:です|と申します|だ)', text_clean)
+        if not name_match:
+            name_match = re.search(r'([^\s、。]+?)\s*と申します', text_clean)
+        if name_match:
+            self.memory_store["user_name"] = name_match.group(1).strip()
+
         # Politeness detection
-        has_desu_masu = bool(re.search(r'(です|ます|でした|ました|ません|ましょう)', text_clean))
-        has_keigo = bool(re.search(r'(いらっしゃ|なさる|おっしゃ|くださ|いたし|存じ|参り|申します|お伺い)', text_clean))
+        has_desu_masu = bool(re.search(r'(です|ます|でした|ました|ません|ましょう|でしょうか)', text_clean))
+        has_keigo = bool(re.search(r'(いらっしゃ|なさる|おっしゃ|くださ|いたし|存じ|参り|申します|お伺い|恐れ入り|拝見)', text_clean))
         has_casual = bool(re.search(r'(だ|だよ|ね|よ|じゃない|ちゃう|てる|とく)[。！？\s]*$', text_clean))
 
         if has_keigo:
@@ -169,6 +214,7 @@ class LanguageCoachEngine:
         else:
             politeness = "Informal / Incomplete"
 
+        # --- Granular Japanese Grammar & Particle Diagnostics ---
         # Pattern 1: Particle 'どこ行きますか' -> 'どこへ行きますか / どこに行きますか'
         if re.search(r'どこ(行く|行きます)', text_clean):
             suggested = re.sub(r'どこ(行く|行きます)', r'どこへ\1', suggested)
@@ -181,7 +227,7 @@ class LanguageCoachEngine:
             notes.append("In polite conversation, explicitly include the direct object particle 『を』 (wo) after 何.")
             is_natural = False
 
-        # Pattern 3: '〜が好きです' vs '〜を好きです' (Common beginner pitfall)
+        # Pattern 3: '〜が好きです' vs '〜を好きです'
         if "を好き" in text_clean:
             suggested = suggested.replace("を好き", "が好き")
             notes.append("In Japanese, 好き (suki) is a na-adjective. The object of affection is marked with 『が』, not 『を』.")
@@ -193,76 +239,173 @@ class LanguageCoachEngine:
             notes.append("Potential verbs like できる (can do) take the particle 『が』 rather than 『を』.")
             is_natural = False
 
-        # Pattern 5: Missing polite ending in public/formal context
-        if not has_desu_masu and not has_keigo and self.scenario in ("cafe", "transit", "hotel", "business"):
-            notes.append("In this situational scenario, ending your sentence with 『〜です』, 『〜ます』, or 『〜でしょうか？』 ensures appropriate respect.")
+        # Pattern 5: '電車を乗る' -> '電車に乗る'
+        if re.search(r'(電車|バス|タクシー|新幹線)を乗[るり]', text_clean):
+            suggested = re.sub(r'(電車|バス|タクシー|新幹線)を(乗[るり])', r'\1に\2', suggested)
+            notes.append("Boarding transportation takes the particle 『に』 rather than 『を』 (e.g. 『電車に乗る』).")
+            is_natural = False
 
-        # Scenario-specific conversational replies
+        # Pattern 6: Bare request in service scenario: '〜ちょうだい', '〜お願い' -> '〜をお願いします'
+        if re.search(r'(お願い|ちょうだい|くれ)[。！？\s]*$', text_clean) and self.scenario in ("cafe", "transit", "hotel"):
+            suggested = re.sub(r'(お願い|ちょうだい|くれ)[。！？\s]*$', r'をお願いします。', suggested)
+            notes.append("In dining or public services, phrase your request politely with 『〜をお願いします』 or 『〜をいただけますか』.")
+            is_natural = False
+
+        # Pattern 7: Missing polite ending in formal situational context
+        if not has_desu_masu and not has_keigo and self.scenario in ("cafe", "transit", "hotel", "business"):
+            if not any(w in text_clean for w in ("はい", "いいえ", "どうも", "ありがとう")):
+                suggested += "です。"
+                notes.append("In this situational scenario, ending sentences with 『〜です』 or 『〜ます』 ensures polite etiquette.")
+                is_natural = False
+
+        # --- Stateful Scenario Multi-Turn Dialogues ---
         sc = self.scenario
+        stage = self.memory_store.get("scenario_stage", 0)
+        user_name = self.memory_store.get("user_name")
+        honorific_name = f"{user_name}様、" if user_name else ""
+
         if sc == "cafe":
-            if any(w in text_clean for w in ("おすすめ", "何がいい", "人気")):
-                reply = "当店のおすすめは特製豚骨ラーメンと焼きたて餃子でございます！どちらにいたしましょうか？"
+            # Intent: Asking recommendation
+            if any(w in text_clean for w in ("おすすめ", "何がいい", "人気", "人気メニュー")):
+                reply = "当店のおすすめは、挽きたてのアイスカフェラテと季節限定の抹茶スフレパンケーキでございます！どちらにいたしましょうか？"
                 vocab_tips.append("『おすすめは何ですか？』 (What do you recommend?)")
-            elif any(w in text_clean for w in ("会計", "いくら", "払", "お勘定")):
-                reply = "お会計ですね！合計で1,250円になります。現金のほか、交通系ICカードもご利用いただけます。"
-                vocab_tips.append("『別々でお願いします』 (Separate checks please)")
-            elif any(w in text_clean for w in ("水", "お冷", "メニュー")):
-                reply = "かしこまりました！お冷とメニューをお持ちいたします。少々お待ちくださいませ。"
+                vocab_tips.append("『一番人気はどれですか？』 (Which is the most popular?)")
+                self.memory_store["scenario_stage"] = 1
+
+            # Intent: Customization (only when already ordered or specifically saying size/dine-in)
+            elif (stage >= 2 and any(w in text_clean.lower() for w in ("店内", "ここ", "お持ち帰り", "持ち帰り", "テイクアウト", "sサイズ", "mサイズ", "lサイズ", "サイズ", "ホットで", "アイスで", "ホット", "アイス"))) or any(w in text_clean.lower() for w in ("店内", "お持ち帰り", "テイクアウト", "sサイズ", "mサイズ", "lサイズ")):
+                reply = "かしこまりました！それでは合計で680円になります。現金のほか、交通系ICカードやクレジットカードもご利用いただけますよ。"
+                vocab_tips.append("『カードで支払えますか？』 (Can I pay by card?)")
+                vocab_tips.append("『領収書をいただけますか？』 (Could I have a receipt?)")
+                self.memory_store["scenario_stage"] = 3
+
+            # Intent: Ordering item
+            elif any(w in text_clean for w in ("コーヒー", "ラテ", "お茶", "紅茶", "ケーキ", "パン", "サンド", "注文", "これ", "ひとつ", "二つ", "ください", "お願いします")):
+                # Extract ordered item name if present
+                for item in ("アイスカフェラテ", "アイスコーヒー", "コーヒー", "カフェラテ", "ラテ", "抹茶ラテ", "紅茶", "パンケーキ"):
+                    if item in text_clean:
+                        self.memory_store["ordered_items"].append(item)
+                        break
+
+                ordered_name = self.memory_store["ordered_items"][-1] if self.memory_store["ordered_items"] else "ご注文のお品物"
+
+                if stage <= 1:
+                    reply = f"かしこまりました！{ordered_name}ですね。サイズはS、M、Lのどれにいたしましょうか？また、店内でお召し上がりですか、それともお持ち帰りですか？"
+                    vocab_tips.append("『Mサイズでお願いします』 (Medium size, please)")
+                    vocab_tips.append("『店内で』 (For here) / 『持ち帰りで』 (To go)")
+                    self.memory_store["scenario_stage"] = 2
+                else:
+                    reply = f"承知いたしました。{ordered_name}をご用意いたしますね。他にご注文やお好みのトッピングはございますか？"
+                    self.memory_store["scenario_stage"] = 3
+
+            # Intent: Water or amenities
+            elif any(w in text_clean for w in ("水", "お冷", "メニュー", "砂糖", "ミルク")):
+                reply = "かしこまりました！すぐにお冷とメニューをお持ちいたしますね。ごゆっくりお過ごしください。"
                 vocab_tips.append("『お冷をいただけますか？』 (Could I have some cold water?)")
+
             else:
-                reply = "いらっしゃいませ！ご注文はお決まりでしょうか？ごゆっくりお選びくださいね。"
-                vocab_tips.append("『これをお願いします』 (I'll have this please)")
+                if stage == 0:
+                    reply = f"いらっしゃいませ！{honorific_name}カフェ・エコーブリッジへようこそ。店内でお召し上がりですか？メニューをお持ちいたしますね。"
+                    vocab_tips.append("『メニューを見せていただけますか？』 (May I see the menu?)")
+                    self.memory_store["scenario_stage"] = 1
+                else:
+                    reply = "かしこまりました！その他に気になる点や追加のご注文はございますでしょうか？"
+                    self.memory_store["scenario_stage"] = stage + 1
 
         elif sc == "transit":
-            if any(w in text_clean for w in ("駅", "改札", "出口", "どこ")):
-                reply = "駅ですね！この道をまっすぐ100メートルほど進むと、右手に東口改札が見えてまいりますよ。"
-                vocab_tips.append("『徒歩5分』 (5 minutes on foot)")
-            elif any(w in text_clean for w in ("何番線", "ホーム", "電車")):
-                reply = "新宿方面行きは3番線ホームからの発車となります。階段を上がって右側です。"
+            # Extract destination
+            dest_match = re.search(r'([^\s、。]+?)(?:駅|行き|まで|へ行きたい|に行きたい)', text_clean)
+            if dest_match and dest_match.group(1) not in ("どこ", "何"):
+                self.memory_store["destination"] = dest_match.group(1).strip() + "駅"
+
+            dest = self.memory_store.get("destination", "目的地")
+
+            if any(w in text_clean for w in ("駅", "改札", "出口", "どこ", "行き方", "どうやって")):
+                reply = f"{dest}ですね！この先の連絡通路をまっすぐ進んでいただくと、右手に3番線ホームへの階段がございますよ。"
                 vocab_tips.append("『〜行きは何番線ですか？』 (Which platform for ...?)")
-            elif any(w in text_clean for w in ("乗り換え", "どうやって")):
-                reply = "次の駅で山手線にお乗り換えいただくと、一番早くてスムーズですよ。"
-                vocab_tips.append("『乗り換え』 (Transfer/Connection)")
+                vocab_tips.append("『徒歩5分』 (5 minutes on foot)")
+                self.memory_store["scenario_stage"] = 1
+
+            elif any(w in text_clean for w in ("何番線", "ホーム", "電車", "線")):
+                reply = f"{dest}方面行きでしたら、4番線の快速電車が一番早いです！約12分で到着いたします。"
+                vocab_tips.append("『快速電車』 (Rapid train) / 『各駅停車』 (Local train)")
+                self.memory_store["scenario_stage"] = 2
+
+            elif any(w in text_clean for w in ("時間", "何分", "いくら", "運賃", "切符", "乗り換え")):
+                reply = f"{dest}までの運賃は220円でございます。交通系ICカードでしたらタッチするだけでスムーズにご乗車いただけますよ。"
+                vocab_tips.append("『ICカードのチャージ』 (Transit card top-up)")
+                self.memory_store["scenario_stage"] = 3
+
             else:
-                reply = "道案内ですね！どちらの駅や施設をお探しですか？お気軽にお尋ねください。"
+                reply = "駅のご案内ですね！どちらの駅や観光地をお探しでしょうか？路線図を見ながら詳しくご案内いたします。"
+                vocab_tips.append("『すみません、道を教えていただけますか？』 (Excuse me, could you tell me the way?)")
 
         elif sc == "hotel":
             if any(w in text_clean for w in ("チェックイン", "予約")):
-                reply = "いらっしゃいませ！ご宿泊のご予約ですね。恐れ入りますが、ご予約のお名前とお電話番号をお伺いできますでしょうか？"
+                reply = f"いらっしゃいませ！ホテル・エコーブリッジへようこそ。ご宿泊のご予約ですね。恐れ入りますが、{honorific_name}お名前とお電話番号をお伺いできますでしょうか？"
                 vocab_tips.append("『予約してある田中です』 (I have a reservation under Tanaka)")
-            elif any(w in text_clean for w in ("朝食", "ご飯", "時間")):
-                reply = "朝食は1階レストランにて、朝7時から9時半まで和洋バイキングをご用意しております。"
+                self.memory_store["scenario_stage"] = 1
+
+            elif user_name or any(w in text_clean for w in ("名前", "予約の")):
+                reply = f"{honorific_name}ご予約確認いたしました！本日より2泊、禁煙デラックスルームでございます。こちらがお部屋のカードキーになります。"
+                vocab_tips.append("『カードキーをお受け取りください』 (Please take your keycard)")
+                self.memory_store["scenario_stage"] = 2
+
+            elif any(w in text_clean for w in ("朝食", "ご飯", "レストラン", "時間")):
+                reply = "朝食は1階ダイニングにて、毎朝7時から9時半まで焼きたてパンと和食バイキングをご用意しております。"
                 vocab_tips.append("『朝食は何時からですか？』 (What time is breakfast?)")
-            elif any(w in text_clean for w in ("荷物", "預け")):
-                reply = "はい、チェックイン前のお荷物はこちらのフロントにて喜んでお預かりいたします！"
-                vocab_tips.append("『荷物を預かっていただけますか？』 (Could you hold my luggage?)")
+                self.memory_store["scenario_stage"] = 3
+
+            elif any(w in text_clean for w in ("荷物", "預け", "チェックアウト")):
+                reply = "はい！チェックイン前やチェックアウト後のお荷物は、フロントにていつでも無料でお預かりいたします。"
+                vocab_tips.append("『荷物を夕方まで預かっていただけますか？』 (Could you hold my bags until evening?)")
+
             else:
-                reply = "ホテルへようこそ！ご滞在中に何かご不明な点やお困りのことはございますか？"
+                reply = f"ご滞在はいかがでしょうか？{honorific_name}何かご不明な点や観光案内など、いつでもお気軽にフロントへお声がけください。"
 
         elif sc == "business":
-            if any(w in text_clean for w in ("初めまして", "自己紹介", "申します")):
-                reply = "初めまして！本日は貴重なお時間をいただきありがとうございます。どうぞよろしくお願いいたします。"
-                vocab_tips.append("『どうぞよろしくお願いいたします』 (Pleased to meet you / Looking forward to working together)")
-            elif any(w in text_clean for w in ("志望動機", "経験", "仕事")):
-                reply = "素晴らしいご経歴ですね！弊社で特に力を発揮したいプロジェクトや強みについて、詳しくお聞かせいただけますか？"
-                vocab_tips.append("『私の強みは〜です』 (My strong point is...)")
+            if any(w in text_clean for w in ("初めまして", "自己紹介", "申します", "よろしく")):
+                reply = f"初めまして！{honorific_name}本日はお忙しい中お時間をいただき誠にありがとうございます。どうぞよろしくお願いいたします。"
+                vocab_tips.append("『どうぞよろしくお願い申し上げます』 (Extremely polite greeting)")
+                self.memory_store["scenario_stage"] = 1
+
+            elif any(w in text_clean for w in ("経験", "プロジェクト", "仕事", "開発", "担当")):
+                reply = "素晴らしいご経歴ですね！特にそのプロジェクトで課題に直面した際、どのように解決されたか詳しくお聞かせいただけますでしょうか？"
+                vocab_tips.append("『課題解決に向けて〜に取り組みました』 (I worked on ... to solve the challenge)")
+                self.memory_store["scenario_stage"] = 2
+
+            elif any(w in text_clean for w in ("強み", "スキル", "長所", "貢献")):
+                reply = "非常に具体的で説得力のあるご説明ですね。弊社のグローバル展開においても大いに活躍していただけると感じております。"
+                self.memory_store["scenario_stage"] = 3
+
             else:
-                reply = "ご説明ありがとうございます。ビジネスの場にふさわしい、非常に丁寧で明瞭な話し方ですね！"
+                reply = "明瞭で礼儀正しいビジネス敬語ですね！続けてこれまでの実績や今後の展望についてお話しください。"
 
         else: # free_talk
-            if "駅" in text_clean or "どこ" in text_clean:
-                reply = "駅ですね！この道をまっすぐ歩いて、2つ目の交差点を右に曲がると見えてきますよ。"
-                vocab_tips.append("『徒歩5分』 (5 minutes on foot) is a great phrase when discussing distances.")
-            elif "何" in text_clean and ("食べ" in text_clean or "お腹" in text_clean):
-                reply = "お腹が空きましたね！近くに美味しいラーメン屋さんとお寿司屋さんがありますが、どちらがいいですか？"
-                vocab_tips.append("『おすすめは何ですか？』 (What do you recommend?)")
-            elif "元気" in text_clean or "こんにちは" in text_clean or "初めまして" in text_clean:
-                reply = "こんにちは！お会いできて嬉しいです。今日の日本語の練習、一緒に楽しく頑張りましょう！"
+            # Dynamic topic memory recognition
+            if any(w in text_clean for w in ("映画", "アニメ", "ドラマ", "観", "見")):
+                reply = "映画やエンタメがお好きなんですね！最近何かおすすめの作品を観られましたか？どんなジャンルが一番好きですか？"
+                vocab_tips.append("『〜にハマっています』 (I'm hooked on / obsessed with ...)")
+            elif any(w in text_clean for w in ("音楽", "バンド", "曲", "聴")):
+                reply = "音楽のお話ですね！普段はどんなジャンルのアーティストをよく聴かれるんですか？"
+                vocab_tips.append("『気分転換に聴きます』 (I listen to it to refresh my mood)")
+            elif any(w in text_clean for w in ("料理", "食べ", "美味しい", "好き", "ラーメン", "寿司", "肉")):
+                reply = "美味しいものの話題は楽しいですね！自分で料理を作られることもありますか？一番の大好物は何ですか？"
+                vocab_tips.append("『大好物は〜です』 (My favorite food is...)")
+            elif any(w in text_clean for w in ("旅行", "日本", "東京", "京都", "行きたい", "観光")):
+                reply = "旅行は素晴らしい体験になりますよね！日本の観光地で特に行ってみたい場所や印象に残っている場所はどこですか？"
+                vocab_tips.append("『一度は訪れてみたいです』 (I'd like to visit at least once)")
+            elif any(w in text_clean for w in ("元気", "こんにちは", "初めまして", "おはよう")):
+                greeting_name = f"{user_name}さん、" if user_name else ""
+                reply = f"こんにちは！{greeting_name}お話しできて嬉しいです。今日の会話練習、リラックスして楽しく進めましょうね！"
+            elif any(w in text_clean for w in ("ありがとう", "助かった")):
+                reply = "どういたしまして！お力になれて嬉しいです。他にも日本語で話してみたいトピックはありますか？"
             else:
-                reply = "なるほど、よく分かりました！とても自然な話し方ですね。続けてもっと詳しく教えてもらえますか？"
+                # Context-aware continuation
+                reply = f"なるほど、とても興味深いお話ですね！{text_clean[:18]}...について、もう少し詳しく聞かせてもらえますか？"
 
         if is_natural and not notes:
-            notes.append("Your sentence structure, particles, and pronunciation rhythm are clear and natural!")
+            notes.append("Your sentence structure, particle connectors, and polite rhythm are completely natural!")
 
         return CoachingResult(
             user_text=text_clean,
@@ -278,15 +421,20 @@ class LanguageCoachEngine:
         )
 
     def _evaluate_english_builtin(self, text: str) -> CoachingResult:
-        """Analyze English grammar, phrasing, and formality with scenario awareness."""
+        """Analyze English grammar, phrasing, and formality with multi-turn memory."""
         text_clean = text.strip()
         notes = []
         vocab_tips = []
         suggested = text_clean
         is_natural = True
 
+        # Extract user name
+        name_match = re.search(r'\b(?:my name is|i am|i\'m)\s+([A-Za-z]+)\b', text_clean, re.I)
+        if name_match:
+            self.memory_store["user_name"] = name_match.group(1).capitalize()
+
         # Politeness / Formality detection
-        has_polite = bool(re.search(r'\b(could you|would you|please|may i|i would like|appreciate|excuse me)\b', text_clean, re.I))
+        has_polite = bool(re.search(r'\b(could you|would you|please|may i|i would like|appreciate|excuse me|kindly)\b', text_clean, re.I))
         has_slang = bool(re.search(r'\b(gonna|wanna|gotta|kinda|dunno|yeah|dude|bro)\b', text_clean, re.I))
 
         if has_polite:
@@ -319,63 +467,103 @@ class LanguageCoachEngine:
             notes.append("'Very' modifies adjectives, not verbs directly. Use 'really like' or 'like ... very much'.")
             is_natural = False
 
-        # Scenario-specific conversational replies
+        # Pattern 4: Bare request in service situation: 'I want this' -> 'Could I please have this?'
+        if re.search(r'\bi want (this|that|water|coffee|tea|bill|check)\b', text_clean, re.I) and self.scenario in ("cafe", "transit", "hotel"):
+            suggested = re.sub(r'\bi want\b', "I would like", suggested, flags=re.I)
+            notes.append("In dining or customer service, 'I would like...' or 'Could I have...?' is much more polite than 'I want'.")
+            is_natural = False
+
+        # Scenario-specific stateful replies
         sc = self.scenario
         lower = text_clean.lower()
+        user_name = self.memory_store.get("user_name")
+        name_prefix = f"{user_name}, " if user_name else ""
 
         if sc == "cafe":
             if any(w in lower for w in ("recommend", "special", "popular")):
                 reply = "Our house special today is the grilled salmon bowl and iced matcha latte! Would you like to try that?"
-                vocab_tips.append("'What do you recommend?' is the most natural way to ask for suggestions.")
-            elif any(w in lower for w in ("bill", "check", "pay", "how much")):
-                reply = "Certainly! The total comes to $14.50. Will you be paying with cash or card?"
-                vocab_tips.append("'Could we have the check, please?' is polite and standard.")
+                vocab_tips.append("'What do you recommend?' is natural when asking for suggestions.")
+                self.memory_store["scenario_stage"] = 1
+            elif any(w in lower for w in ("coffee", "latte", "tea", "cake", "sandwich", "order", "have", "please")):
+                reply = "Excellent choice! What size would you like — small, medium, or large? And would that be for here or to go?"
+                vocab_tips.append("'For here or to go?' is the standard dining question.")
+                vocab_tips.append("'A medium latte, to go, please.'")
+                self.memory_store["scenario_stage"] = 2
+            elif any(w in lower for w in ("here", "to go", "small", "medium", "large", "hot", "iced")):
+                reply = "Got it! That comes to $6.50. Will you be paying with credit card, Apple Pay, or cash?"
+                vocab_tips.append("'Can I tap to pay?'")
+                self.memory_store["scenario_stage"] = 3
+            elif any(w in lower for w in ("card", "cash", "pay", "bill", "check")):
+                reply = "Payment approved! Here is your receipt. We'll have your order ready at the pickup counter in just a moment!"
+                vocab_tips.append("'Keep the change!'")
+                self.memory_store["scenario_stage"] = 4
             else:
-                reply = "Welcome to our cafe! Take your time with the menu, and let me know whenever you're ready to order."
-                vocab_tips.append("'I'll have the...' is natural when ordering.")
+                reply = f"Welcome to EchoBridge Cafe! {name_prefix}Take your time looking over the menu, and let me know whenever you're ready."
+                vocab_tips.append("'I'm ready to order.'")
 
         elif sc == "transit":
-            if any(w in lower for w in ("station", "where", "how to get", "exit")):
-                reply = "You can take the central line right from here! It's just a 5-minute walk down the main street."
-                vocab_tips.append("'Within walking distance' is a natural native idiom.")
-            elif any(w in lower for w in ("platform", "train", "line")):
-                reply = "Trains toward downtown depart from Platform 2. Take the escalator up on your left."
-                vocab_tips.append("'Which platform for...?' is concise and clear.")
+            if any(w in lower for w in ("station", "where", "how to get", "exit", "direction")):
+                reply = "You can take the central subway line right from here! It's just a 3-minute walk down this avenue on your right."
+                vocab_tips.append("'Within walking distance' is an authentic native idiom.")
+                self.memory_store["scenario_stage"] = 1
+            elif any(w in lower for w in ("platform", "track", "train", "line")):
+                reply = "Trains bound for the airport depart from Platform 3. Take the escalator down on your left."
+                vocab_tips.append("'Which platform for the airport express?'")
+                self.memory_store["scenario_stage"] = 2
+            elif any(w in lower for w in ("time", "how long", "fare", "cost", "ticket", "much")):
+                reply = "The journey takes about 18 minutes, and a single ticket is $3.25. You can tap your contactless card directly at the fare gate."
+                vocab_tips.append("'Does this train run direct?'")
+                self.memory_store["scenario_stage"] = 3
             else:
-                reply = "I'd be glad to help with transit! Which destination or landmark are you trying to reach?"
+                reply = "I'd be glad to help with navigation! Which station, terminal, or landmark are you trying to reach?"
 
         elif sc == "hotel":
             if any(w in lower for w in ("check in", "reservation", "booking")):
-                reply = "Welcome! May I have the name and phone number on the reservation, please?"
-                vocab_tips.append("'I have a reservation under the name...'")
-            elif any(w in lower for w in ("breakfast", "morning", "time")):
-                reply = "Breakfast is served in the main dining room on the second floor between 7:00 and 10:00 AM."
-            elif any(w in lower for w in ("luggage", "bag", "hold")):
-                reply = "Of course! We can securely hold your luggage behind the front desk until your room is ready."
+                reply = f"Welcome to EchoBridge Hotel! {name_prefix}May I have your last name and phone number on the booking, please?"
+                vocab_tips.append("'I have a reservation under the name of...'")
+                self.memory_store["scenario_stage"] = 1
+            elif user_name or any(w in lower for w in ("name is", "booked")):
+                reply = f"Thank you, {user_name}! I found your reservation for 2 nights in our King Deluxe room. Here is your keycard for room 405."
+                self.memory_store["scenario_stage"] = 2
+            elif any(w in lower for w in ("breakfast", "morning", "time", "wifi", "internet")):
+                reply = "Complimentary breakfast is served in the main lounge from 7:00 to 10:00 AM, and high-speed Wi-Fi details are on your key sleeve."
+                vocab_tips.append("'What is the Wi-Fi password?'")
+            elif any(w in lower for w in ("luggage", "bag", "hold", "store", "checkout")):
+                reply = "Certainly! We can securely hold your luggage in our storage room for as long as you need after checkout."
                 vocab_tips.append("'Could you hold my bags for a few hours?'")
             else:
-                reply = "Welcome to the hotel! Please let us know if there is anything we can do to make your stay comfortable."
+                reply = f"Welcome! {name_prefix}Please let our front desk team know if there is anything we can do to make your stay comfortable."
 
         elif sc == "business":
-            if any(w in lower for w in ("introduce", "pleasure", "meet you")):
-                reply = "It's a pleasure to meet you as well! Thank you for joining us today. Let's get started."
-                vocab_tips.append("'It's a pleasure to make your acquaintance' is formal and polished.")
-            elif any(w in lower for w in ("experience", "project", "role")):
-                reply = "That sounds like a very impactful initiative. What was your specific leadership contribution to that outcome?"
+            if any(w in lower for w in ("meet you", "pleasure", "introduce", "morning", "afternoon")):
+                reply = f"It's a pleasure to meet you as well, {name_prefix}! Thank you for joining us today. Let's begin our discussion."
+                vocab_tips.append("'It's a pleasure to make your acquaintance.'")
+                self.memory_store["scenario_stage"] = 1
+            elif any(w in lower for w in ("experience", "project", "role", "work", "team")):
+                reply = "That sounds like a very high-impact initiative. Could you highlight your specific strategy for managing project risks?"
+                self.memory_store["scenario_stage"] = 2
+            elif any(w in lower for w in ("strength", "skill", "leadership")):
+                reply = "Thank you for that thorough explanation. Your structured communication style is clear, professional, and convincing."
             else:
-                reply = "Thank you for sharing that. Your communication style is clear, articulate, and well-structured!"
+                reply = "Thank you for sharing. Please continue and tell us more about your background and core technical strengths."
 
         else: # free_talk
-            if "station" in lower or "where" in lower:
-                reply = "You can take the central line right from here! It's just a 5-minute walk down the main street."
-                vocab_tips.append("'Within walking distance' is a natural native idiom.")
-            elif "food" in lower or "eat" in lower or "hungry" in lower:
-                reply = "There's an amazing local cafe just around the corner. What kind of cuisine are you in the mood for?"
-                vocab_tips.append("'I'm in the mood for...' expresses your craving naturally.")
-            elif "hello" in lower or "hi" in lower or "morning" in lower:
-                reply = "Good day! It's great to speak with you. What would you like to chat about today?"
+            if any(w in lower for w in ("movie", "film", "watch", "anime", "series")):
+                reply = "Movies are great! What's the best film you've seen recently? Do you prefer action, sci-fi, or drama?"
+                vocab_tips.append("'I was on the edge of my seat' (Very exciting film)")
+            elif any(w in lower for w in ("music", "song", "band", "listen")):
+                reply = "What kind of music do you like to listen to when you're relaxing or working?"
+            elif any(w in lower for w in ("food", "eat", "cook", "restaurant", "hungry")):
+                reply = "Food is always a wonderful conversation topic! Do you enjoy cooking at home, or do you prefer dining out?"
+                vocab_tips.append("'I have a sweet tooth' (I love desserts)")
+            elif any(w in lower for w in ("travel", "trip", "visit", "japan", "tokyo")):
+                reply = "Traveling is so enriching! Have you been to Japan before, or are you planning an upcoming trip?"
+            elif any(w in lower for w in ("hello", "hi", "how are you", "good morning")):
+                reply = f"Hello {name_prefix}! It's wonderful to speak with you today. What would you like to chat about?"
+            elif any(w in lower for w in ("thank", "appreciate", "helpful")):
+                reply = "You're very welcome! I'm happy to help. Feel free to keep chatting and practicing!"
             else:
-                reply = "That makes total sense! Could you tell me a little more about that?"
+                reply = f"That's really interesting! Could you tell me a little more about {text_clean[:20]}...?"
 
         if is_natural and not notes:
             notes.append("Excellent phrasing and natural grammatical cadence!")
@@ -394,7 +582,7 @@ class LanguageCoachEngine:
         )
 
     def _query_ollama(self, text: str, lang: str) -> Optional[CoachingResult]:
-        """Query local Ollama instance for conversational partner response and structured grammar coaching."""
+        """Query local Ollama instance with full multi-turn conversation memory."""
         sc_info = COACH_SCENARIOS.get(self.scenario, COACH_SCENARIOS["free_talk"])
         role_prompt = sc_info.get(f"role_{lang}", sc_info["role_ja"])
 
@@ -402,7 +590,7 @@ class LanguageCoachEngine:
             f"You are a friendly, encouraging AI Language Tutor helping the user master {('Japanese' if lang == 'ja' else 'English')}.\n"
             f"ROLE-PLAY SCENARIO: {sc_info['title']}\n"
             f"SCENARIO INSTRUCTION: {role_prompt}\n"
-            "Analyze what the user said, continue the conversation naturally in the practice language while staying in character, and provide constructive feedback.\n"
+            "Maintain conversational context from previous turns. Continue the dialogue naturally in character while providing constructive corrections.\n"
             "Respond ONLY with valid JSON in this exact structure:\n"
             "{\n"
             '  "reply": "In-character conversational reply in the practice language",\n'
@@ -414,12 +602,15 @@ class LanguageCoachEngine:
             "}"
         )
 
+        # Construct multi-turn messages array
+        messages = [{"role": "system", "content": system_prompt}]
+        for turn in self.conversation_history[-6:]:
+            messages.append({"role": turn["role"], "content": turn["content"]})
+        messages.append({"role": "user", "content": text})
+
         payload = {
             "model": self.ollama_model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": text}
-            ],
+            "messages": messages,
             "format": "json",
             "stream": False
         }
@@ -451,7 +642,7 @@ class LanguageCoachEngine:
             return None
 
     def _query_api(self, text: str, lang: str) -> Optional[CoachingResult]:
-        """Query external OpenAI-compatible API endpoint for coaching."""
+        """Query external OpenAI-compatible API endpoint with full multi-turn conversation memory."""
         sc_info = COACH_SCENARIOS.get(self.scenario, COACH_SCENARIOS["free_talk"])
         role_prompt = sc_info.get(f"role_{lang}", sc_info["role_ja"])
 
@@ -459,15 +650,17 @@ class LanguageCoachEngine:
             system_prompt = (
                 f"You are an encouraging AI Language Tutor for {('Japanese' if lang == 'ja' else 'English')}. "
                 f"Current scenario: {sc_info['title']}. Role instruction: {role_prompt}. "
-                "Analyze the user's sentence, stay in character with your reply, and output pure JSON: "
+                "Maintain conversational context from previous turns. Stay in character and output pure JSON: "
                 "{\"reply\": \"...\", \"correction\": \"...\", \"is_natural\": bool, \"politeness\": \"...\", \"grammar_notes\": \"...\", \"vocabulary_tips\": [\"...\"]}"
             )
+            messages = [{"role": "system", "content": system_prompt}]
+            for turn in self.conversation_history[-6:]:
+                messages.append({"role": turn["role"], "content": turn["content"]})
+            messages.append({"role": "user", "content": text})
+
             payload = {
                 "model": self.api_model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": text}
-                ],
+                "messages": messages,
                 "response_format": {"type": "json_object"}
             }
             req = urllib.request.Request(

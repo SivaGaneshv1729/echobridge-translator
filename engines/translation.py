@@ -50,7 +50,7 @@ class TranslatorEngine:
 
     def translate(self, text: str, from_code: str, to_code: str) -> Tuple[str, float]:
         """
-        Translate input text from source language to target language.
+        Translate input text from source language to target language using beam search and clean post-processing.
         Returns: (translated_text, latency_ms)
         """
         if not text or not text.strip():
@@ -64,10 +64,41 @@ class TranslatorEngine:
         sp = self._tokenizers[pair_key]
 
         t0 = time.perf_counter()
-        tokens = sp.encode_as_pieces(text.strip())
-        results = translator.translate_batch([tokens])
+        clean_text = text.strip()
+        tokens = sp.encode_as_pieces(clean_text)
+        
+        try:
+            results = translator.translate_batch(
+                [tokens],
+                beam_size=4,
+                patience=1.2,
+                length_penalty=1.0,
+                repetition_penalty=1.15,
+                no_repeat_ngram_size=3,
+                replace_unknowns=True
+            )
+        except TypeError:
+            # Fallback for environments with minimal parameter signatures
+            results = translator.translate_batch([tokens], beam_size=2)
+
         out_tokens = results[0].hypotheses[0]
         translated = sp.decode_pieces(out_tokens).strip()
+
+        # Clean punctuation and casing post-processing
+        if to_code == "en":
+            if translated and translated[0].islower():
+                translated = translated[0].upper() + translated[1:]
+            if clean_text.endswith("?") and not translated.endswith("?"):
+                translated = translated.rstrip(".") + "?"
+            elif not translated.endswith((".", "!", "?")):
+                translated += "."
+        elif to_code == "ja":
+            # Replace half-width question mark with full-width if appropriate
+            if translated.endswith("?"):
+                translated = translated[:-1] + "？"
+            elif not translated.endswith(("。", "！", "？")):
+                translated += "。"
+
         latency_ms = (time.perf_counter() - t0) * 1000
 
         logger.debug(f"Translated [{pair_key}] in {latency_ms:.2f}ms: '{text}' -> '{translated}'")

@@ -111,9 +111,11 @@ class ConversationManager:
             self.set_active_speaker_lang(self.lang_a)
 
     def clear_history(self):
-        """Clear conversation history."""
+        """Clear conversation history and reset pipeline context memory."""
         self.history.clear()
         self._turn_counter = 0
+        if hasattr(self, "pipeline") and hasattr(self.pipeline, "clear_history"):
+            self.pipeline.clear_history()
 
     def get_history_as_dicts(self) -> List[Dict[str, Any]]:
         """Return history as JSON-serializable list of dictionaries."""

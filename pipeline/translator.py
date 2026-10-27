@@ -34,6 +34,7 @@ class TranslationPipeline:
         self.app_mode: str = "translate"     # "translate" or "coach"
         self.practice_lang: str = "ja"       # Target language user is practicing
         self.coach = LanguageCoachEngine()
+        self.conversation_memory: List[Dict[str, str]] = []
 
         # Event callbacks
         self.on_audio_level: Optional[Callable[[float], None]] = None
@@ -166,11 +167,13 @@ class TranslationPipeline:
         logger.info(f"Processing speech utterance ({len(audio_data)/16000:.2f}s of audio)...")
 
         try:
-            # 1. Speech Recognition (Auto-detect language if in auto mode)
+            # 1. Speech Recognition with Conversation Context Memory
             stt_lang = None if self.source_lang in ("auto", None) else self.source_lang
+            recent_context = [m["original_text"] for m in self.conversation_memory[-4:]]
             orig_text, detected_lang, stt_ms = self.stt.transcribe(
                 audio_data,
-                language=stt_lang
+                language=stt_lang,
+                context_history=recent_context
             )
             if not orig_text.strip():
                 logger.info("Transcribed text was empty (no clear speech recognized).")
@@ -209,6 +212,16 @@ class TranslationPipeline:
                     self.on_synthesis(audio_bytes, sample_rate, tts_ms)
 
                 total_ms = (time.perf_counter() - t_start) * 1000
+
+                # Record turn to conversation memory
+                self.conversation_memory.append({
+                    "original_text": orig_text,
+                    "translated_text": coach_res.reply_text,
+                    "source_language": coach_lang,
+                    "target_language": coach_lang
+                })
+                if len(self.conversation_memory) > 20:
+                    self.conversation_memory = self.conversation_memory[-20:]
 
                 if self.auto_playback and len(audio_bytes) > 0:
                     self.playback.play_raw_bytes(audio_bytes, sample_rate=sample_rate, blocking=False)
@@ -260,6 +273,16 @@ class TranslationPipeline:
                 self.on_synthesis(audio_bytes, sample_rate, tts_ms)
 
             total_ms = (time.perf_counter() - t_start) * 1000
+
+            # Record turn to conversation memory
+            self.conversation_memory.append({
+                "original_text": orig_text,
+                "translated_text": translated_text,
+                "source_language": act_source,
+                "target_language": act_target
+            })
+            if len(self.conversation_memory) > 20:
+                self.conversation_memory = self.conversation_memory[-20:]
 
             # 4. Speaker Playback
             if self.auto_playback and len(audio_bytes) > 0:
@@ -313,3 +336,9 @@ class TranslationPipeline:
                 self._utterance_queue.put(flushed_utterance)
         else:
             self.segmenter.reset()
+
+    def clear_history(self):
+        """Clear local conversation memory and AI Coach dialogue context."""
+        self.conversation_memory.clear()
+        self.coach.clear_history()
+        logger.info("TranslationPipeline conversation memory and coach history reset.")
