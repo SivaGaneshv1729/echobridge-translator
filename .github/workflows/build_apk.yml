@@ -29,28 +29,33 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Configure Android Build & Gradle Wrapper
+      - name: Scaffold & Configure Android Platform
         working-directory: mobile
         run: |
-          # 1. Generate canonical gradle wrapper files using Flutter SDK in a temporary directory
-          flutter create --platforms=android --org com.echobridge /tmp/flutter_scaffold
-          
-          # 2. Supply gradlew launcher script and wrapper binary to repository android folder
-          cp /tmp/flutter_scaffold/android/gradlew ./android/gradlew
-          chmod +x ./android/gradlew
-          mkdir -p ./android/gradle/wrapper
-          cp /tmp/flutter_scaffold/android/gradle/wrapper/gradle-wrapper.jar ./android/gradle/wrapper/gradle-wrapper.jar 2>/dev/null || true
+          # 1. Regenerate canonical Flutter 3.24 Android platform scaffold
+          rm -rf android
+          flutter create --platforms=android --org com.echobridge .
 
-          # 3. Ensure Gradle 8.5 distribution in wrapper properties
-          sed -i 's/gradle-[0-9.]*-/gradle-8.5-/g' android/gradle/wrapper/gradle-wrapper.properties 2>/dev/null || true
+          # 2. Add required permissions to AndroidManifest.xml and ensure no deprecated package attribute
+          sed -i 's/package="com.echobridge.translator"//g' android/app/src/main/AndroidManifest.xml
+          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.WAKE_LOCK" />' android/app/src/main/AndroidManifest.xml
 
-          # 4. Guarantee compileSdk 35 and minSdkVersion 24 in app/build.gradle
-          sed -i -E 's/minSdk(Version)?(\s*=?\s*)(flutter\.minSdkVersion|[0-9]+)/minSdkVersion 24/g' android/app/build.gradle 2>/dev/null || true
-          sed -i -E 's/compileSdk(Version)?(\s*=?\s*)(flutter\.compileSdkVersion|[0-9]+)/compileSdk 35/g' android/app/build.gradle 2>/dev/null || true
-          sed -i -E 's/targetSdk(Version)?(\s*=?\s*)(flutter\.targetSdkVersion|[0-9]+)/targetSdkVersion 35/g' android/app/build.gradle 2>/dev/null || true
+          # 3. Patch minSdk >= 24 for sherpa_onnx & record_android, compileSdk 35 for audioplayers
+          sed -i -E 's/minSdk(Version)?\s*=\s*flutter\.minSdkVersion/minSdk = 24/g' android/app/build.gradle
+          sed -i -E 's/minSdk(Version)?\s+flutter\.minSdkVersion/minSdk 24/g' android/app/build.gradle
+          sed -i -E 's/compileSdk(Version)?\s*=\s*flutter\.compileSdkVersion/compileSdk = 35/g' android/app/build.gradle
+          sed -i -E 's/compileSdk(Version)?\s+flutter\.compileSdkVersion/compileSdk 35/g' android/app/build.gradle
+          sed -i -E 's/targetSdk(Version)?\s*=\s*flutter\.targetSdkVersion/targetSdk = 35/g' android/app/build.gradle
+          sed -i -E 's/targetSdk(Version)?\s+flutter\.targetSdkVersion/targetSdk 35/g' android/app/build.gradle
 
-          # 5. Guarantee no deprecated package attribute in AndroidManifest.xml
-          sed -i 's/package="com.echobridge.translator"//g' android/app/src/main/AndroidManifest.xml 2>/dev/null || true
+          # 4. Configure debug signing for release build so APK is sideloadable
+          sed -i 's/buildTypes {/buildTypes {\n        release {\n            signingConfig = signingConfigs.debug\n        }/' android/app/build.gradle
+
+          # 5. Ensure Gradle 8.5 in wrapper properties
+          sed -i 's/gradle-[0-9.]*-/gradle-8.5-/g' android/gradle/wrapper/gradle-wrapper.properties
+
+          echo "=== Patched android/app/build.gradle ==="
+          cat android/app/build.gradle
 
       - name: Install Dependencies
         working-directory: mobile
