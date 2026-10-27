@@ -11,7 +11,7 @@ dependencies:
     sdk: flutter
   sherpa_onnx: ^1.10.38
   onnxruntime: ^1.4.0
-  record: ^7.1.2
+  record: ^6.2.1
   audioplayers: ^6.1.0
   path_provider: ^2.1.2
   google_fonts: ^6.2.1

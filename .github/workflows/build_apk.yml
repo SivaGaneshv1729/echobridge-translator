@@ -31,7 +31,9 @@ jobs:
 
       - name: Install Dependencies
         working-directory: mobile
-        run: flutter pub get
+        run: |
+          flutter pub get
+          find /home/runner/.pub-cache -name "build.gradle" -exec sed -i 's/flutter.compileSdkVersion/35/g' {} + 2>/dev/null || true
 
       - name: Prepare Official Gradle Wrapper
         working-directory: mobile
