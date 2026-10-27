@@ -258,7 +258,7 @@ class LanguageCoachEngine:
                 {"role": "user", "content": text}
             ],
             "format": "json",
-            "stream": false
+            "stream": False
         }
 
         try:
