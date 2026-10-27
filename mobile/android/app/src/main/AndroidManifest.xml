@@ -1,5 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.echobridge.translator">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Permissions for Offline Microphone Streaming & Audio Playback -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />

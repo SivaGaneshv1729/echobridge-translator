@@ -41,6 +41,7 @@ jobs:
 
           # 3. Restore custom AndroidManifest.xml with microphone & foreground service permissions
           cp /tmp/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          sed -i 's/package="com.echobridge.translator"//g' android/app/src/main/AndroidManifest.xml
 
           # 4. Ensure minSdkVersion >= 24 for sherpa_onnx and compileSdk 35 for audioplayers
           sed -i 's/minSdkVersion = flutter.minSdkVersion/minSdkVersion = 24/g' android/app/build.gradle
