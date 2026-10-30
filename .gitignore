@@ -36,3 +36,8 @@ temp_*.wav
 # PyInstaller builds & distributions
 build/
 dist/
+
+# API keys and local secrets
+config/api_keys.json
+.env
+
