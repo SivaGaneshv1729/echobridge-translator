@@ -29,36 +29,13 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Scaffold & Configure Android Platform
+      - name: Verify Android Configuration
         working-directory: mobile
         run: |
-          # 1. Regenerate canonical Flutter 3.24 Android platform scaffold
-          rm -rf android
-          flutter create --platforms=android --org com.echobridge .
-
-          # 2. Add required permissions to AndroidManifest.xml and ensure no deprecated package attribute
-          sed -i 's/package="com.echobridge.translator"//g' android/app/src/main/AndroidManifest.xml
-          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.WAKE_LOCK" />' android/app/src/main/AndroidManifest.xml
-
-          # 3. Patch minSdk >= 24 for sherpa_onnx & record_android, compileSdk 35 for audioplayers
-          sed -i -E 's/minSdk(Version)?\s*=\s*flutter\.minSdkVersion/minSdk = 24/g' android/app/build.gradle
-          sed -i -E 's/minSdk(Version)?\s+flutter\.minSdkVersion/minSdk 24/g' android/app/build.gradle
-          sed -i -E 's/compileSdk(Version)?\s*=\s*flutter\.compileSdkVersion/compileSdk = 35/g' android/app/build.gradle
-          sed -i -E 's/compileSdk(Version)?\s+flutter\.compileSdkVersion/compileSdk 35/g' android/app/build.gradle
-          sed -i -E 's/targetSdk(Version)?\s*=\s*flutter\.targetSdkVersion/targetSdk = 35/g' android/app/build.gradle
-          sed -i -E 's/targetSdk(Version)?\s+flutter\.targetSdkVersion/targetSdk 35/g' android/app/build.gradle
-
-          # 4. Configure debug signing for release build so APK is sideloadable
-          sed -i 's/buildTypes {/buildTypes {\n        release {\n            signingConfig = signingConfigs.debug\n        }/' android/app/build.gradle
-
-          # 5. Resolve duplicate native library conflicts between onnxruntime & sherpa_onnx
-          sed -i '/android {/a \    packagingOptions {\n        pickFirst "**/libonnxruntime.so"\n        pickFirst "**/libc++_shared.so"\n    }' android/app/build.gradle
-
-          # 6. Ensure Gradle 8.5 in wrapper properties
-          sed -i 's/gradle-[0-9.]*-/gradle-8.5-/g' android/gradle/wrapper/gradle-wrapper.properties
-
-          echo "=== Patched android/app/build.gradle ==="
+          echo "=== android/app/build.gradle ==="
           cat android/app/build.gradle
+          echo "=== android/settings.gradle ==="
+          cat android/settings.gradle
 
       - name: Install Dependencies
         working-directory: mobile

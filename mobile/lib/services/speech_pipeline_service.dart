@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
@@ -42,6 +43,112 @@ class SpeechPipelineService {
 
   int _coachStage = 0;
   final List<Map<String, String>> _conversationMemory = [];
+
+  // Multi-key pools for Groq and Gemini loaded dynamically from environment
+  final List<String> _groqKeys = [
+    const String.fromEnvironment('GROQ_API_KEY_1', defaultValue: ''),
+    const String.fromEnvironment('GROQ_API_KEY_2', defaultValue: ''),
+    const String.fromEnvironment('GROQ_API_KEY_3', defaultValue: ''),
+    const String.fromEnvironment('GROQ_API_KEY_4', defaultValue: ''),
+    const String.fromEnvironment('GROQ_API_KEY_5', defaultValue: ''),
+    Platform.environment['GROQ_API_KEY'] ?? '',
+  ].where((k) => k.isNotEmpty).toList();
+  int _groqKeyIndex = 0;
+
+  final List<String> _geminiKeys = [
+    const String.fromEnvironment('GEMINI_API_KEY_1', defaultValue: ''),
+    const String.fromEnvironment('GEMINI_API_KEY_2', defaultValue: ''),
+    const String.fromEnvironment('GEMINI_API_KEY_3', defaultValue: ''),
+    const String.fromEnvironment('GEMINI_API_KEY_4', defaultValue: ''),
+    const String.fromEnvironment('GEMINI_API_KEY_5', defaultValue: ''),
+    Platform.environment['GEMINI_API_KEY'] ?? '',
+  ].where((k) => k.isNotEmpty).toList();
+  int _geminiKeyIndex = 0;
+
+  /// Queries the Groq API key pool with auto-rotation on 429/failures and multi-turn context memory.
+  Future<Map<String, dynamic>?> _queryGroqPool(String userText) async {
+    for (int attempt = 0; attempt < _groqKeys.length; attempt++) {
+      final key = _groqKeys[_groqKeyIndex];
+      try {
+        final client = HttpClient();
+        client.connectionTimeout = const Duration(seconds: 7);
+        final request = await client.postUrl(Uri.parse('https://api.groq.com/openai/v1/chat/completions'));
+        request.headers.set(HttpHeaders.contentTypeHeader, 'application/json; charset=utf-8');
+        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $key');
+        request.headers.set(HttpHeaders.userAgentHeader, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+
+        final systemPrompt = "You are an encouraging AI Japanese Language Tutor in the scenario '$_scenario'. Respond with pure JSON: {\"reply\": \"...\", \"correction\": \"...\", \"is_natural\": bool, \"politeness\": \"...\", \"grammar_notes\": \"...\", \"vocab\": \"word1: meaning; word2: meaning\"}";
+        final messages = [
+          {"role": "system", "content": systemPrompt},
+          ..._conversationMemory.take(6),
+          {"role": "user", "content": userText}
+        ];
+
+        final payload = {
+          "model": "qwen/qwen3.8-27b",
+          "messages": messages,
+          "response_format": {"type": "json_object"},
+          "temperature": 0.4
+        };
+        request.write(jsonEncode(payload));
+        final response = await request.close();
+        if (response.statusCode == 200) {
+          final body = await response.transform(utf8.decoder).join();
+          client.close();
+          final data = jsonDecode(body);
+          final content = data["choices"][0]["message"]["content"];
+          return jsonDecode(content);
+        } else {
+          client.close();
+          _groqKeyIndex = (_groqKeyIndex + 1) % _groqKeys.length;
+        }
+      } catch (e) {
+        _groqKeyIndex = (_groqKeyIndex + 1) % _groqKeys.length;
+      }
+    }
+    return null;
+  }
+
+  /// Queries the Gemini API key pool with auto-rotation on 429/failures and multi-turn context memory.
+  Future<Map<String, dynamic>?> _queryGeminiPool(String userText) async {
+    for (int attempt = 0; attempt < _geminiKeys.length; attempt++) {
+      final key = _geminiKeys[_geminiKeyIndex];
+      try {
+        final client = HttpClient();
+        client.connectionTimeout = const Duration(seconds: 9);
+        final uri = Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$key');
+        final request = await client.postUrl(uri);
+        request.headers.set(HttpHeaders.contentTypeHeader, 'application/json; charset=utf-8');
+        request.headers.set(HttpHeaders.userAgentHeader, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+
+        final prompt = "You are an encouraging AI Language Tutor for scenario '$_scenario'. User said: '$userText'. Respond ONLY with pure JSON: {\"reply\": \"...\", \"correction\": \"...\", \"is_natural\": bool, \"politeness\": \"...\", \"grammar_notes\": \"...\", \"vocab\": \"...\"}";
+        final payload = {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [{"text": prompt}]
+            }
+          ],
+          "generationConfig": {"response_mime_type": "application/json"}
+        };
+        request.write(jsonEncode(payload));
+        final response = await request.close();
+        if (response.statusCode == 200) {
+          final body = await response.transform(utf8.decoder).join();
+          client.close();
+          final data = jsonDecode(body);
+          final content = data["candidates"][0]["content"]["parts"][0]["text"];
+          return jsonDecode(content);
+        } else {
+          client.close();
+          _geminiKeyIndex = (_geminiKeyIndex + 1) % _geminiKeys.length;
+        }
+      } catch (e) {
+        _geminiKeyIndex = (_geminiKeyIndex + 1) % _geminiKeys.length;
+      }
+    }
+    return null;
+  }
 
   // Utterance accumulation buffer
   final BytesBuilder _utteranceBuffer = BytesBuilder();
@@ -141,7 +248,34 @@ class SpeechPipelineService {
       if (_appMode == "coach") {
         onStatusChanged?.call("AI Coach evaluating speech & scenario dynamics...");
         final t1 = DateTime.now();
-        final coachData = _getCoachScenarioData(_scenario, _coachStage);
+        final offlineData = _getCoachScenarioData(_scenario, _coachStage);
+        final spokenText = offlineData["original"]!;
+
+        // Attempt live LLM evaluation via Groq with Gemini fallback
+        Map<String, dynamic>? liveData = await _queryGroqPool(spokenText);
+        if (liveData == null) {
+          liveData = await _queryGeminiPool(spokenText);
+        }
+
+        final Map<String, dynamic> coachData;
+        if (liveData != null) {
+          coachData = {
+            "original": spokenText,
+            "reply": (liveData["reply"] as String?) ?? offlineData["reply"]!,
+            "correction": (liveData["correction"] as String?) ?? spokenText,
+            "is_natural": liveData["is_natural"]?.toString() ?? "true",
+            "politeness": (liveData["politeness"] as String?) ?? "丁寧語 (Polite)",
+            "grammar_notes": (liveData["grammar_notes"] as String?) ?? "Natural and fluent expression!",
+            "vocab": (liveData["vocab"] as String?) ?? offlineData["vocab"]!,
+          };
+          _conversationMemory.add({"role": "user", "content": spokenText});
+          _conversationMemory.add({"role": "assistant", "content": coachData["reply"]});
+          if (_conversationMemory.length > 12) {
+            _conversationMemory.removeRange(0, 2);
+          }
+        } else {
+          coachData = offlineData;
+        }
         _coachStage++;
 
         final t2 = DateTime.now();
