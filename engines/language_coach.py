@@ -3,6 +3,7 @@ Supports Stateful Multi-Turn Conversational Memory, Contextual Grammar Analysis,
 Hybrid Local Heuristic Engine, Local Ollama (Qwen2.5/Llama3), and OpenAI-compatible endpoints.
 Includes Situational Role-Play Scenarios (Dining, Transit, Hotel, Business, Free Talk).
 """
+import os
 import json
 import logging
 import re
@@ -75,13 +76,20 @@ class LanguageCoachEngine:
 
     def __init__(
         self,
-        provider: str = "builtin",          # "builtin", "ollama", or "api"
+        provider: Optional[str] = None,     # "builtin", "groq", "gemini", "ollama", or "api"
         ollama_url: str = "http://localhost:11434",
         ollama_model: str = "qwen2.5:0.5b",
         api_url: Optional[str] = None,
         api_key: Optional[str] = None,
         api_model: str = "gpt-4o-mini",
-        scenario: str = "free_talk"
+        scenario: str = "free_talk",
+        groq_model: str = "qwen/qwen3.8-27b",
+        gemini_model: str = "gemini-2.5-flash",
+        api_keys_file: str = "config/api_keys.json",
+        groq_keys: Optional[List[str]] = None,
+        gemini_keys: Optional[List[str]] = None,
+        rotation_enabled: bool = True,
+        fallback_to_offline: bool = True
     ):
         self.provider = provider
         self.ollama_url = ollama_url.rstrip("/")
@@ -90,6 +98,19 @@ class LanguageCoachEngine:
         self.api_key = api_key
         self.api_model = api_model
         self.scenario = scenario if scenario in COACH_SCENARIOS else "free_talk"
+        self.groq_model = groq_model
+        self.gemini_model = gemini_model
+        self.api_keys_file = api_keys_file
+        self.rotation_enabled = rotation_enabled
+        self.fallback_to_offline = fallback_to_offline
+
+        self.groq_keys: List[str] = list(groq_keys or [])
+        self.gemini_keys: List[str] = list(gemini_keys or [])
+        self.groq_key_index: int = 0
+        self.gemini_key_index: int = 0
+
+        # Load key pools from config file and environment
+        self._load_keys_from_config(self.api_keys_file, explicit_provider=provider)
 
         # Multi-turn conversational memory & entity store
         self.conversation_history: List[Dict[str, str]] = []
@@ -99,6 +120,86 @@ class LanguageCoachEngine:
             "ordered_items": [],
             "scenario_stage": 0,
             "topics": []
+        }
+
+    def _load_keys_from_config(self, filepath: str, explicit_provider: Optional[str] = None):
+        """Loads API keys for Groq and Gemini from json file and environment variables."""
+        paths_to_check = [
+            filepath,
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), filepath),
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "api_keys.json"),
+            "config/api_keys.json"
+        ]
+
+        for p in paths_to_check:
+            if os.path.exists(p):
+                try:
+                    with open(p, "r", encoding="utf-8") as f:
+                        cfg = json.load(f)
+                    if "groq" in cfg:
+                        if not self.groq_keys and "keys" in cfg["groq"]:
+                            self.groq_keys = [k.strip() for k in cfg["groq"]["keys"] if k.strip()]
+                        if "model" in cfg["groq"] and cfg["groq"]["model"]:
+                            self.groq_model = cfg["groq"]["model"]
+                    if "gemini" in cfg:
+                        if not self.gemini_keys and "keys" in cfg["gemini"]:
+                            self.gemini_keys = [k.strip() for k in cfg["gemini"]["keys"] if k.strip()]
+                        if "model" in cfg["gemini"] and cfg["gemini"]["model"]:
+                            self.gemini_model = cfg["gemini"]["model"]
+                    break
+                except Exception as e:
+                    logger.warning(f"Error loading API keys from {p}: {e}")
+
+        # Supplement with environment variables if available
+        for i in range(1, 10):
+            gk = os.environ.get(f"GROQ_API_KEY_{i}") or (os.environ.get("GROQ_API_KEY") if i == 1 else None)
+            if gk and gk.strip() and gk.strip() not in self.groq_keys:
+                self.groq_keys.append(gk.strip())
+            
+            gemk = os.environ.get(f"GEMINI_API_KEY_{i}") or (os.environ.get("GEMINI_API_KEY") if i == 1 else None)
+            if gemk and gemk.strip() and gemk.strip() not in self.gemini_keys:
+                self.gemini_keys.append(gemk.strip())
+
+        # Check settings.json for coach provider preference if not explicitly provided
+        if explicit_provider is None:
+            settings_paths = ["config/settings.json", os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "settings.json")]
+            for sp in settings_paths:
+                if os.path.exists(sp):
+                    try:
+                        with open(sp, "r", encoding="utf-8") as f:
+                            scfg = json.load(f)
+                        c_cfg = scfg.get("coach", {})
+                        if "provider" in c_cfg:
+                            self.provider = c_cfg["provider"]
+                        if "groq_model" in c_cfg and c_cfg["groq_model"]:
+                            self.groq_model = c_cfg["groq_model"]
+                        if "gemini_model" in c_cfg and c_cfg["gemini_model"]:
+                            self.gemini_model = c_cfg["gemini_model"]
+                        break
+                    except Exception:
+                        pass
+
+        if not self.provider:
+            self.provider = "builtin"
+
+        if self.provider == "groq" and not self.groq_keys:
+            self.provider = "builtin"
+        elif self.provider == "gemini" and not self.gemini_keys:
+            self.provider = "builtin"
+
+        logger.info(f"LanguageCoachEngine initialized (provider: {self.provider}): {len(self.groq_keys)} Groq keys, {len(self.gemini_keys)} Gemini keys loaded.")
+
+    def get_key_pool_status(self) -> Dict[str, Any]:
+        """Returns the operational status of external LLM key pools."""
+        return {
+            "provider": self.provider,
+            "groq_keys_count": len(self.groq_keys),
+            "groq_active_index": self.groq_key_index,
+            "gemini_keys_count": len(self.gemini_keys),
+            "gemini_active_index": self.gemini_key_index,
+            "groq_model": self.groq_model,
+            "gemini_model": self.gemini_model,
+            "fallback_to_offline": self.fallback_to_offline
         }
 
     def clear_history(self):
@@ -133,7 +234,7 @@ class LanguageCoachEngine:
     def evaluate_and_reply(self, user_text: str, practice_lang: str = "ja") -> CoachingResult:
         """
         Evaluate user's spoken sentence and generate a conversational reply + coaching notes
-        with multi-turn conversational memory.
+        with multi-turn conversational memory, key rotation, and seamless offline fallback.
         """
         user_text = user_text.strip()
         if not user_text:
@@ -149,21 +250,47 @@ class LanguageCoachEngine:
                 scenario_id=self.scenario
             )
 
-        # 1. Try Ollama if configured
+        # 1. Try Groq Pool if configured
+        if self.provider == "groq":
+            result = self._query_groq_pool(user_text, practice_lang)
+            if result:
+                self._record_turn(user_text, result.reply_text)
+                return result
+            elif self.fallback_to_offline:
+                logger.info("Groq pool exhausted. Attempting Gemini pool fallback...")
+                result = self._query_gemini_pool(user_text, practice_lang)
+                if result:
+                    self._record_turn(user_text, result.reply_text)
+                    return result
+
+        # 2. Try Gemini Pool if configured
+        if self.provider == "gemini":
+            result = self._query_gemini_pool(user_text, practice_lang)
+            if result:
+                self._record_turn(user_text, result.reply_text)
+                return result
+            elif self.fallback_to_offline:
+                logger.info("Gemini pool exhausted. Attempting Groq pool fallback...")
+                result = self._query_groq_pool(user_text, practice_lang)
+                if result:
+                    self._record_turn(user_text, result.reply_text)
+                    return result
+
+        # 3. Try Ollama if configured
         if self.provider == "ollama":
             result = self._query_ollama(user_text, practice_lang)
             if result:
                 self._record_turn(user_text, result.reply_text)
                 return result
 
-        # 2. Try Cloud / Custom API if configured
+        # 4. Try Cloud / Custom API if configured
         if self.provider == "api" and self.api_url and self.api_key:
             result = self._query_api(user_text, practice_lang)
             if result:
                 self._record_turn(user_text, result.reply_text)
                 return result
 
-        # 3. Default: High-performance Builtin Multi-Turn Heuristic Evaluator
+        # 5. Default: High-performance Builtin Multi-Turn Heuristic Evaluator (100% Offline)
         result = self._evaluate_builtin(user_text, practice_lang)
         self._record_turn(user_text, result.reply_text)
         return result
@@ -690,3 +817,183 @@ class LanguageCoachEngine:
         except Exception as e:
             logger.warning(f"Cloud API coach query failed ({e}), falling back to builtin engine.")
             return None
+
+    def _query_groq_pool(self, text: str, lang: str) -> Optional[CoachingResult]:
+        """Query Groq High-Speed LLM pool with key rotation and multi-turn context memory."""
+        if not self.groq_keys:
+            logger.warning("No Groq API keys available.")
+            return None
+
+        sc_info = COACH_SCENARIOS.get(self.scenario, COACH_SCENARIOS["free_talk"])
+        role_prompt = sc_info.get(f"role_{lang}", sc_info["role_ja"])
+
+        system_prompt = (
+            f"You are an encouraging, highly skilled AI Language Tutor helping the user master {('Japanese' if lang == 'ja' else 'English')}.\n"
+            f"ROLE-PLAY SCENARIO: {sc_info['title']}\n"
+            f"SCENARIO INSTRUCTION: {role_prompt}\n"
+            "Maintain conversational context from previous turns. Continue dialogue naturally in character while providing constructive grammar & politeness coaching.\n"
+            "Respond ONLY with valid JSON in this exact structure:\n"
+            "{\n"
+            '  "reply": "In-character conversational reply in the practice language",\n'
+            '  "correction": "Natural, corrected sentence (or exact user text if already natural)",\n'
+            '  "is_natural": true or false,\n'
+            '  "politeness": "Casual / Polite (丁寧語) / Honorific (敬語) / Formal",\n'
+            '  "grammar_notes": "Concise English explanation of grammar, particles, or nuance",\n'
+            '  "vocabulary_tips": ["Tip 1", "Tip 2"]\n'
+            "}"
+        )
+
+        messages = [{"role": "system", "content": system_prompt}]
+        for turn in self.conversation_history[-8:]:
+            messages.append({"role": turn["role"], "content": turn["content"]})
+        messages.append({"role": "user", "content": text})
+
+        payload = {
+            "model": self.groq_model,
+            "messages": messages,
+            "response_format": {"type": "json_object"},
+            "temperature": 0.4
+        }
+        encoded_data = json.dumps(payload).encode("utf-8")
+
+        max_attempts = len(self.groq_keys)
+        for attempt in range(max_attempts):
+            cur_key = self.groq_keys[self.groq_key_index]
+            masked_key = cur_key[:8] + "..." + cur_key[-4:] if len(cur_key) > 12 else "key"
+            try:
+                req = urllib.request.Request(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    data=encoded_data,
+                    headers={
+                        "Authorization": f"Bearer {cur_key}",
+                        "Content-Type": "application/json",
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    }
+                )
+                with urllib.request.urlopen(req, timeout=10.0) as resp:
+                    resp_data = json.loads(resp.read().decode("utf-8"))
+                    content = resp_data["choices"][0]["message"]["content"]
+                    parsed = self._parse_llm_json(content)
+                    is_nat = bool(parsed.get("is_natural", True))
+                    corr = parsed.get("correction") or text
+                    notes = parsed.get("grammar_notes") or ("Natural and fluent expression!" if is_nat else "Good practice!")
+                    tips = parsed.get("vocabulary_tips") or []
+                    if not isinstance(tips, list):
+                        tips = [str(tips)]
+
+                    return CoachingResult(
+                        user_text=text,
+                        practice_lang=lang,
+                        reply_text=parsed.get("reply") or "Understood!",
+                        reply_lang=lang,
+                        suggested_correction=corr,
+                        is_natural=is_nat,
+                        politeness_level=parsed.get("politeness") or "Polite",
+                        grammar_notes=notes,
+                        vocabulary_tips=tips,
+                        scenario_id=self.scenario
+                    )
+            except urllib.error.HTTPError as e:
+                logger.warning(f"Groq API key {masked_key} error HTTP {e.code}. Rotating key...")
+                self.groq_key_index = (self.groq_key_index + 1) % len(self.groq_keys)
+            except Exception as e:
+                logger.warning(f"Groq API query error with key {masked_key}: {e}. Rotating key...")
+                self.groq_key_index = (self.groq_key_index + 1) % len(self.groq_keys)
+
+        logger.warning("All Groq API keys in pool failed or exhausted.")
+        return None
+
+    def _query_gemini_pool(self, text: str, lang: str) -> Optional[CoachingResult]:
+        """Query Google Gemini LLM pool with key rotation and multi-turn context memory."""
+        if not self.gemini_keys:
+            logger.warning("No Gemini API keys available.")
+            return None
+
+        sc_info = COACH_SCENARIOS.get(self.scenario, COACH_SCENARIOS["free_talk"])
+        role_prompt = sc_info.get(f"role_{lang}", sc_info["role_ja"])
+
+        prompt_lines = [
+            f"You are an encouraging, expert AI Language Tutor helping the user master {('Japanese' if lang == 'ja' else 'English')}.",
+            f"ROLE-PLAY SCENARIO: {sc_info['title']}",
+            f"SCENARIO INSTRUCTION: {role_prompt}",
+            "Maintain conversational context from previous turns. Stay in character.",
+            "Respond ONLY with valid JSON with keys: reply, correction, is_natural, politeness, grammar_notes, vocabulary_tips.",
+            "\n--- RECENT CONVERSATION CONTEXT ---"
+        ]
+        for turn in self.conversation_history[-8:]:
+            prompt_lines.append(f"{turn['role'].upper()}: {turn['content']}")
+        prompt_lines.append(f"USER: {text}")
+        prompt_lines.append("\nOutput pure JSON matching the specified schema:")
+
+        full_prompt = "\n".join(prompt_lines)
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": full_prompt}]
+                }
+            ],
+            "generationConfig": {
+                "response_mime_type": "application/json"
+            }
+        }
+        encoded_data = json.dumps(payload).encode("utf-8")
+
+        max_attempts = len(self.gemini_keys)
+        for attempt in range(max_attempts):
+            cur_key = self.gemini_keys[self.gemini_key_index]
+            masked_key = cur_key[:8] + "..." + cur_key[-4:] if len(cur_key) > 12 else "key"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent?key={cur_key}"
+            try:
+                req = urllib.request.Request(
+                    url,
+                    data=encoded_data,
+                    headers={
+                        "Content-Type": "application/json",
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    }
+                )
+                with urllib.request.urlopen(req, timeout=12.0) as resp:
+                    resp_data = json.loads(resp.read().decode("utf-8"))
+                    content = resp_data["candidates"][0]["content"]["parts"][0]["text"]
+                    parsed = self._parse_llm_json(content)
+                    is_nat = bool(parsed.get("is_natural", True))
+                    corr = parsed.get("correction") or text
+                    notes = parsed.get("grammar_notes") or ("Natural and fluent expression!" if is_nat else "Good practice!")
+                    tips = parsed.get("vocabulary_tips") or []
+                    if not isinstance(tips, list):
+                        tips = [str(tips)]
+
+                    return CoachingResult(
+                        user_text=text,
+                        practice_lang=lang,
+                        reply_text=parsed.get("reply") or "Understood!",
+                        reply_lang=lang,
+                        suggested_correction=corr,
+                        is_natural=is_nat,
+                        politeness_level=parsed.get("politeness") or "Polite",
+                        grammar_notes=notes,
+                        vocabulary_tips=tips,
+                        scenario_id=self.scenario
+                    )
+            except urllib.error.HTTPError as e:
+                logger.warning(f"Gemini API key {masked_key} error HTTP {e.code}. Rotating key...")
+                self.gemini_key_index = (self.gemini_key_index + 1) % len(self.gemini_keys)
+            except Exception as e:
+                logger.warning(f"Gemini API query error with key {masked_key}: {e}. Rotating key...")
+                self.gemini_key_index = (self.gemini_key_index + 1) % len(self.gemini_keys)
+
+        logger.warning("All Gemini API keys in pool failed or exhausted.")
+        return None
+
+    @staticmethod
+    def _parse_llm_json(raw: str) -> Dict[str, Any]:
+        """Safely parse LLM responses that may include code fences or leading commentary."""
+        raw = raw.strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"^```(?:json)?\s*", "", raw)
+            raw = re.sub(r"\s*```$", "", raw)
+        match = re.search(r'(\{[\s\S]*\})', raw)
+        if match:
+            raw = match.group(1)
+        return json.loads(raw)

@@ -84,7 +84,9 @@ class SettingsDialog(QDialog):
             "audio": {"input_device_index": None, "output_device_index": None, "auto_playback": True, "playback_volume": 1.0},
             "vad": {"threshold": 0.5},
             "coach": {
-                "provider": "builtin",
+                "provider": "groq",
+                "groq_model": "qwen/qwen3.8-27b",
+                "gemini_model": "gemini-2.5-flash",
                 "ollama_model": "qwen2.5:0.5b",
                 "ollama_url": "http://localhost:11434",
                 "api_url": "",
@@ -99,6 +101,25 @@ class SettingsDialog(QDialog):
                 self.config = default
         else:
             self.config = default
+
+    def _get_api_key_counts(self):
+        groq_cnt = 0
+        gemini_cnt = 0
+        key_paths = [
+            self.config.get("coach", {}).get("api_keys_file", "config/api_keys.json"),
+            "config/api_keys.json"
+        ]
+        for kp in key_paths:
+            if os.path.exists(kp):
+                try:
+                    with open(kp, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        groq_cnt = len(data.get("groq", {}).get("keys", []))
+                        gemini_cnt = len(data.get("gemini", {}).get("keys", []))
+                    break
+                except Exception:
+                    pass
+        return groq_cnt, gemini_cnt
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -151,15 +172,30 @@ class SettingsDialog(QDialog):
         coach_group = QGroupBox("🎓 AI Language Coach & Tutor Engine")
         coach_layout = QFormLayout(coach_group)
 
+        groq_cnt, gemini_cnt = self._get_api_key_counts()
+        self.key_status_label = QLabel(f"🟢 Key Pools Active: {groq_cnt} Groq Keys | {gemini_cnt} Gemini Keys (Auto-Rotated & Fallback)")
+        self.key_status_label.setStyleSheet("color: #34d399; font-weight: bold; font-size: 11px;")
+        coach_layout.addRow("Key Pool Status:", self.key_status_label)
+
         self.coach_provider_combo = QComboBox()
-        self.coach_provider_combo.addItem("100% Offline Rule & Linguistic Heuristics (<1ms, 0MB RAM)", "builtin")
-        self.coach_provider_combo.addItem("Local Ollama SLM/LLM (e.g. Qwen2.5 / Llama3)", "ollama")
-        self.coach_provider_combo.addItem("Custom Cloud / OpenAI-Compatible Endpoint", "api")
+        self.coach_provider_combo.addItem("⚡ Groq High-Speed LLM (Qwen 27B / Low Latency ~800ms)", "groq")
+        self.coach_provider_combo.addItem("✨ Google Gemini Flash (gemini-2.5-flash)", "gemini")
+        self.coach_provider_combo.addItem("🛡️ 100% Offline Rule & Linguistic Heuristics (<1ms, 0MB RAM)", "builtin")
+        self.coach_provider_combo.addItem("💻 Local Ollama SLM/LLM (e.g. Qwen2.5 / Llama3)", "ollama")
+        self.coach_provider_combo.addItem("🌐 Custom Cloud / OpenAI-Compatible Endpoint", "api")
         
-        cur_prov = self.config.get("coach", {}).get("provider", "builtin")
+        cur_prov = self.config.get("coach", {}).get("provider", "groq")
         idx = self.coach_provider_combo.findData(cur_prov)
         if idx >= 0:
             self.coach_provider_combo.setCurrentIndex(idx)
+
+        self.groq_model_edit = QLineEdit()
+        self.groq_model_edit.setPlaceholderText("e.g. qwen/qwen3.8-27b")
+        self.groq_model_edit.setText(self.config.get("coach", {}).get("groq_model", "qwen/qwen3.8-27b"))
+
+        self.gemini_model_edit = QLineEdit()
+        self.gemini_model_edit.setPlaceholderText("e.g. gemini-2.5-flash")
+        self.gemini_model_edit.setText(self.config.get("coach", {}).get("gemini_model", "gemini-2.5-flash"))
 
         self.ollama_model_edit = QLineEdit()
         self.ollama_model_edit.setPlaceholderText("e.g. qwen2.5:0.5b or llama3.2")
@@ -170,8 +206,10 @@ class SettingsDialog(QDialog):
         self.ollama_url_edit.setText(self.config.get("coach", {}).get("ollama_url", "http://localhost:11434"))
 
         coach_layout.addRow("Coach Provider:", self.coach_provider_combo)
-        coach_layout.addRow("Ollama / API Model:", self.ollama_model_edit)
-        coach_layout.addRow("Endpoint URL:", self.ollama_url_edit)
+        coach_layout.addRow("Groq Model:", self.groq_model_edit)
+        coach_layout.addRow("Gemini Model:", self.gemini_model_edit)
+        coach_layout.addRow("Ollama Model:", self.ollama_model_edit)
+        coach_layout.addRow("Ollama / API URL:", self.ollama_url_edit)
         layout.addWidget(coach_group)
 
         # 4. Voice Activity & Playback Controls
@@ -233,6 +271,8 @@ class SettingsDialog(QDialog):
         vol = self.vol_slider.value() / 100.0
         autoplay = self.autoplay_cb.isChecked()
         coach_prov = self.coach_provider_combo.currentData()
+        groq_model = self.groq_model_edit.text().strip()
+        gemini_model = self.gemini_model_edit.text().strip()
         ollama_model = self.ollama_model_edit.text().strip()
         ollama_url = self.ollama_url_edit.text().strip()
 
@@ -252,6 +292,8 @@ class SettingsDialog(QDialog):
         self.config["stt"]["model_size"] = model_size
         self.config["vad"]["threshold"] = vad_thresh
         self.config["coach"]["provider"] = coach_prov
+        self.config["coach"]["groq_model"] = groq_model
+        self.config["coach"]["gemini_model"] = gemini_model
         self.config["coach"]["ollama_model"] = ollama_model
         self.config["coach"]["ollama_url"] = ollama_url
 

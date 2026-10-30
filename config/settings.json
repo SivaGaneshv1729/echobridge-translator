@@ -58,6 +58,14 @@
     },
     "length_scale": 1.0
   },
+  "coach": {
+    "provider": "groq",
+    "groq_model": "qwen/qwen3.8-27b",
+    "gemini_model": "gemini-2.5-flash",
+    "api_keys_file": "config/api_keys.json",
+    "rotation_enabled": true,
+    "fallback_to_offline": true
+  },
   "models_dir": "models_cache",
   "diagnostics": {
     "log_level": "INFO",

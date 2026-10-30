@@ -894,9 +894,14 @@ class MainWindow(QMainWindow):
 
         coach_cfg = new_config.get("coach", {})
         if hasattr(self.manager.pipeline, "coach"):
-            self.manager.pipeline.coach.provider = coach_cfg.get("provider", "builtin")
-            self.manager.pipeline.coach.ollama_model = coach_cfg.get("ollama_model", "qwen2.5:0.5b")
-            self.manager.pipeline.coach.ollama_url = coach_cfg.get("ollama_url", "http://localhost:11434")
+            coach = self.manager.pipeline.coach
+            coach.provider = coach_cfg.get("provider", "groq")
+            if "groq_model" in coach_cfg and coach_cfg["groq_model"]:
+                coach.groq_model = coach_cfg["groq_model"]
+            if "gemini_model" in coach_cfg and coach_cfg["gemini_model"]:
+                coach.gemini_model = coach_cfg["gemini_model"]
+            coach.ollama_model = coach_cfg.get("ollama_model", "qwen2.5:0.5b")
+            coach.ollama_url = coach_cfg.get("ollama_url", "http://localhost:11434")
 
         self.status_label.setText("Settings applied.")
 
