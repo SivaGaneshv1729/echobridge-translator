@@ -143,27 +143,33 @@ class TranslationPipeline:
             logger.info(f"Ignored short audio chunk ({len(audio_data) if audio_data is not None else 0} samples)")
             return None
 
-        # 1. High-Pass Filter (75Hz) to remove mechanical desk thumps and low-frequency rumble
+        # 1. DC Offset Removal (eliminates microphone bias)
+        audio_data = (audio_data - np.mean(audio_data)).astype(np.float32)
+
+        # 2. Vocal Bandpass Filter (80Hz - 7600Hz) to isolate human speech frequencies
         try:
             import scipy.signal
-            sos = scipy.signal.butter(2, 75, btype='highpass', fs=16000, output='sos')
+            sos = scipy.signal.butter(4, [80, 7600], btype='bandpass', fs=16000, output='sos')
             audio_data = scipy.signal.sosfilt(sos, audio_data).astype(np.float32)
         except Exception:
             pass
 
-        # 2. Add 150ms (2400 samples) of clean silence padding on both ends to eliminate Whisper edge artifacts
-        audio_data = np.pad(audio_data, (2400, 2400), mode="constant")
+        # 3. Dynamic RMS Normalization / AGC for quiet or distant microphones
+        rms = float(np.sqrt(np.mean(audio_data**2)))
+        if rms > 1e-4:
+            target_rms = 0.085  # ~ -21 dBFS optimal Whisper acoustic level
+            gain = float(np.clip(target_rms / rms, 1.0, 15.0))
+            if gain > 1.05:
+                audio_data = audio_data * gain
+                peak = float(np.max(np.abs(audio_data)))
+                if peak > 0.95:
+                    audio_data = np.tanh(audio_data / 0.95) * 0.95
+                logger.info(f"Applied speech precision AGC: {gain:.1f}x (RMS: {rms:.4f} -> {float(np.sqrt(np.mean(audio_data**2))):.4f})")
+
+        # 4. Clean 120ms (1920 samples) silence padding on both ends to eliminate Whisper edge artifacts
+        audio_data = np.pad(audio_data, (1920, 1920), mode="constant").astype(np.float32)
 
         t_start = time.perf_counter()
-        
-        # 3. Dynamic Peak Normalization / AGC for quiet laptop microphones
-        max_amp = float(np.max(np.abs(audio_data)))
-        if max_amp > 1e-4:
-            gain = min(15.0, 0.75 / max_amp)
-            if gain > 1.05:
-                audio_data = np.clip(audio_data * gain, -1.0, 1.0).astype(np.float32)
-                logger.info(f"Applied audio precision boost: {gain:.1f}x (original peak: {max_amp:.3f})")
-
         logger.info(f"Processing speech utterance ({len(audio_data)/16000:.2f}s of audio)...")
 
         try:

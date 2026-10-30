@@ -62,7 +62,7 @@ class UtteranceSegmenter:
         vad: SileroVAD,
         sample_rate: int = 16000,
         min_speech_duration_ms: int = 150,
-        min_silence_duration_ms: int = 400,
+        min_silence_duration_ms: int = 650,
         speech_pad_ms: int = 300
     ):
         self.vad = vad
@@ -70,9 +70,12 @@ class UtteranceSegmenter:
         self.min_speech_chunks = max(2, int((min_speech_duration_ms / 1000) * sample_rate / 512))
         self.min_silence_chunks = int((min_silence_duration_ms / 1000) * sample_rate / 512)
         self.pad_chunks = int((speech_pad_ms / 1000) * sample_rate / 512)
+        # Keep ~120ms of post-speech cushion to avoid clipping final consonant while preventing dead air
+        self.trailing_pad_chunks = max(2, int((120 / 1000) * sample_rate / 512))
 
         self.buffer: List[np.ndarray] = []
         self.pre_buffer: List[np.ndarray] = []
+        self.candidate_buffer: List[np.ndarray] = []
         self.is_speaking = False
         self.silence_counter = 0
         self.speech_chunks_count = 0
@@ -87,16 +90,15 @@ class UtteranceSegmenter:
         is_speech_chunk = prob >= self.vad.threshold
 
         if not self.is_speaking:
-            self.pre_buffer.append(chunk_512)
-            if len(self.pre_buffer) > self.pad_chunks:
-                self.pre_buffer.pop(0)
-
             if is_speech_chunk:
+                self.candidate_buffer.append(chunk_512)
                 self.speech_chunks_count += 1
                 if self.speech_chunks_count >= self.min_speech_chunks:
                     self.is_speaking = True
-                    self.buffer = list(self.pre_buffer)
+                    # Full lead-in: pre-speech ambient cushion + confirmed speech candidates
+                    self.buffer = list(self.pre_buffer) + list(self.candidate_buffer)
                     self.pre_buffer.clear()
+                    self.candidate_buffer.clear()
                     self.silence_counter = 0
                     if self.on_speech_started:
                         try:
@@ -104,15 +106,28 @@ class UtteranceSegmenter:
                         except Exception as e:
                             logger.error(f"Error in on_speech_started: {e}")
             else:
-                self.speech_chunks_count = max(0, self.speech_chunks_count - 1)
+                # Discard transient false-alarm clicks (less than min_speech_chunks)
+                if self.candidate_buffer:
+                    self.pre_buffer.extend(self.candidate_buffer)
+                    self.candidate_buffer.clear()
+                self.speech_chunks_count = 0
+                self.pre_buffer.append(chunk_512)
+                while len(self.pre_buffer) > self.pad_chunks:
+                    self.pre_buffer.pop(0)
+
             return None
         else:
             self.buffer.append(chunk_512)
             if not is_speech_chunk:
                 self.silence_counter += 1
                 if self.silence_counter >= self.min_silence_chunks:
-                    # End of utterance detected
-                    utterance = np.concatenate(self.buffer)
+                    # End of utterance detected — trim excessive trailing dead air
+                    cutoff = max(
+                        self.min_speech_chunks,
+                        len(self.buffer) - self.silence_counter + self.trailing_pad_chunks
+                    )
+                    trimmed_chunks = self.buffer[:cutoff] if cutoff < len(self.buffer) else self.buffer
+                    utterance = np.concatenate(trimmed_chunks) if trimmed_chunks else None
                     self.reset()
                     return utterance
             else:
@@ -123,10 +138,19 @@ class UtteranceSegmenter:
         """Flush currently buffered speech into a complete utterance (used on PTT release or Stop)."""
         utterance = None
         if len(self.buffer) > 0 and len(self.buffer) >= self.min_speech_chunks:
-            utterance = np.concatenate(self.buffer)
+            # Trim trailing silence if any
+            cutoff = max(
+                self.min_speech_chunks,
+                len(self.buffer) - self.silence_counter + self.trailing_pad_chunks
+            )
+            trimmed_chunks = self.buffer[:cutoff] if cutoff < len(self.buffer) else self.buffer
+            utterance = np.concatenate(trimmed_chunks) if trimmed_chunks else None
+        elif len(self.candidate_buffer) >= self.min_speech_chunks:
+            all_chunks = list(self.pre_buffer) + list(self.candidate_buffer)
+            utterance = np.concatenate(all_chunks) if all_chunks else None
         elif len(self.pre_buffer) > 0 and self.speech_chunks_count >= self.min_speech_chunks:
             utterance = np.concatenate(self.pre_buffer)
-        
+
         self.reset()
         return utterance
 
@@ -134,6 +158,7 @@ class UtteranceSegmenter:
         """Reset segmenter state."""
         self.buffer.clear()
         self.pre_buffer.clear()
+        self.candidate_buffer.clear()
         self.is_speaking = False
         self.silence_counter = 0
         self.speech_chunks_count = 0

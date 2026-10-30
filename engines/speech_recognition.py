@@ -66,7 +66,24 @@ class SpeechRecognizer:
 
         t0 = time.perf_counter()
 
-        # Build dynamic context-aware prompt using conversation history
+        # Step 1: Pre-detect language in bilingual mode (language=None)
+        # This prevents Whisper from decoding in an arbitrary wrong language on acoustic noise
+        resolved_decode_lang = language
+        if language is None:
+            try:
+                detected_candidate, prob, all_probs = self.model.detect_language(audio_data)
+                probs = dict(all_probs) if all_probs else {}
+                if detected_candidate in ("en", "ja"):
+                    resolved_decode_lang = detected_candidate
+                else:
+                    # Disambiguate between English and Japanese
+                    resolved_decode_lang = "ja" if probs.get("ja", 0.0) > probs.get("en", 0.0) else "en"
+                logger.debug(f"Pre-detected language: {resolved_decode_lang} (raw: {detected_candidate}, prob: {prob:.2f})")
+            except Exception as e:
+                logger.debug(f"Language pre-detection fallback: {e}")
+                resolved_decode_lang = None
+
+        # Step 2: Build dynamic context-aware prompt using conversation history & resolved language
         prompt_parts = []
         if context_history:
             recent_context = " ".join([h.strip() for h in context_history[-4:] if h.strip()])
@@ -79,62 +96,97 @@ class SpeechRecognizer:
         if initial_prompt:
             prompt_parts.append(initial_prompt)
         else:
-            if language == "en":
+            if resolved_decode_lang == "en":
                 prompt_parts.append("Conversational English dialogue: Clear speech, punctuation, question marks, and full sentences.")
-            elif language == "ja":
+            elif resolved_decode_lang == "ja":
                 prompt_parts.append("自然な日本語の会話：です、ます、敬語、日常表現、句読点を含む丁寧な対話。")
             else:
                 prompt_parts.append("Bilingual English and Japanese natural conversation: Hello, こんにちは, よろしくお願いします。")
 
         full_prompt = " ".join(prompt_parts)
 
-        # Standard hotwords for travel, everyday dialogue, and polite speech
+        # Step 3: Standard hotwords for travel, everyday dialogue, and polite speech
         default_hotwords = hotwords
         if not default_hotwords:
-            if language == "ja":
-                default_hotwords = "駅 改札 おすすめ お願いします ありがとうございます です ます どこ"
-            elif language == "en":
-                default_hotwords = "station entrance recommend please thank you bill check where"
+            if resolved_decode_lang == "ja":
+                default_hotwords = "駅 改札 切符 売り場 切符売り場 おすすめ お願いします ありがとうございます です ます どこ 新幹線 ホテル 注文 メニュー 会計 領収書 トイレ 出口 空港"
+            elif resolved_decode_lang == "en":
+                default_hotwords = "station ticket platform entrance recommend please thank you bill check where directions hotel airport"
 
+        # Step 4: Transcribe using resolved decode language
         try:
             segments, info = self.model.transcribe(
                 audio_data,
-                language=language,
+                language=resolved_decode_lang,
                 beam_size=beam_size,
                 best_of=best_of,
                 patience=patience,
                 temperature=temperature,
                 initial_prompt=full_prompt,
-                repetition_penalty=1.1,
+                repetition_penalty=1.15,
                 no_repeat_ngram_size=3,
-                hallucination_silence_threshold=1.5,
+                hallucination_silence_threshold=1.2,
                 hotwords=default_hotwords,
                 condition_on_previous_text=False,
-                vad_filter=False # VAD is already handled upstream
+                vad_filter=False  # Upstream Silero VAD already handled segmentation
             )
         except TypeError:
             # Fallback for environments with minimal parameter signatures
             segments, info = self.model.transcribe(
                 audio_data,
-                language=language,
+                language=resolved_decode_lang,
                 beam_size=beam_size,
                 temperature=temperature,
                 initial_prompt=full_prompt,
                 condition_on_previous_text=False,
                 vad_filter=False
             )
-        
-        text_segments = [s.text.strip() for s in segments if s.text.strip()]
+
+        # Step 5: Filter hallucinations, repetitive artifacts, and low-confidence non-speech segments
+        known_hallucinations = {
+            "thank you", "thank you.", "thank you very much.", "thank you for watching.",
+            "thanks for watching.", "thanks for watching", "please subscribe.",
+            "subscribe to my channel.", "subtitles by", "translated by", "bye.", "bye bye.",
+            "see you next time.", "[music]", "(music)", "[applause]", "(applause)",
+            "...", "..", ".", "you", "so", "oh",
+            "ご視聴ありがとうございました", "ご視聴ありがとうございました。",
+            "チャンネル登録お願いします", "チャンネル登録をお願いします",
+            "チャンネル登録", "字幕", "おやすみなさい", "ではまた"
+        }
+
+        text_segments = []
+        for s in segments:
+            text = s.text.strip()
+            if not text:
+                continue
+
+            # Check segment compression ratio and no-speech probability
+            if getattr(s, "no_speech_prob", 0.0) > 0.65 and getattr(s, "avg_logprob", 0.0) < -1.0:
+                continue
+            if getattr(s, "compression_ratio", 1.0) > 2.4:
+                continue
+
+            cleaned_check = text.strip(" !?.,;:~()[]{}\"'\u3001\u3002\uFF01\uFF1F").lower()
+            if cleaned_check in known_hallucinations:
+                continue
+
+            text_segments.append(text)
+
         full_text = " ".join(text_segments).strip()
-        
-        detected_lang = info.language if info else (language or "unknown")
-        
-        # In bilingual mode (EN <-> JA), if language detection picks an outlier code due to ambient noise,
-        # resolve directly between en and ja using their probabilities
-        if language is None and info and hasattr(info, "all_language_probs") and info.all_language_probs:
-            probs = dict(info.all_language_probs)
-            if detected_lang not in ("en", "ja"):
-                detected_lang = "ja" if probs.get("ja", 0) > probs.get("en", 0) else "en"
+
+        # Step 6: Determine detected language
+        detected_lang = resolved_decode_lang or (info.language if info else (language or "unknown"))
+
+        # Step 7: Post-transcription script consistency validation
+        if full_text:
+            import re
+            has_japanese_chars = bool(re.search(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]', full_text))
+            has_latin_chars = bool(re.search(r'[A-Za-z]{2,}', full_text))
+
+            if has_japanese_chars and not has_latin_chars:
+                detected_lang = "ja"
+            elif has_latin_chars and not has_japanese_chars:
+                detected_lang = "en"
 
         latency_ms = (time.perf_counter() - t0) * 1000
 
